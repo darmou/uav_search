@@ -1,0 +1,27 @@
+{
+  "name": "uav_search",
+  "version": "1.0.0",
+  "description": "Find multiple search paths",
+  "main": "calculate_random_point_on_polygon.js",
+  "dependencies": {
+    "geolib": "^2.0.22",
+    "gmaps": "^0.4.24",
+    "xrange": "^1.0.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://darmou@bitbucket.org/darmou/uav_search.git"
+  },
+  "keywords": [
+    "UAV",
+    "Search",
+    "Pathfinder"
+  ],
+  "author": "Daryl Moulder and Noah Ruderman",
+  "license": "ISC",
+  "homepage": "https://bitbucket.org/darmou/uav_search#readme"
+}
