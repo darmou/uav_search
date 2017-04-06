@@ -7,7 +7,8 @@
     "geolib": "^2.0.22",
     "gmaps": "^0.4.24",
     "xrange": "^1.0.1",
-    "geojson-utils": "^1.1.0"
+    "geojson-utils": "^1.1.0",
+    "geojson-tools": "^0.2.2"
   },
   "devDependencies": {},
   "scripts": {

@@ -83,6 +83,7 @@ function Polygon(pointArray) {
    }
 }
 
+var pointsInPolygon = [];
 var area = 0;
 var polygon = new Polygon(input);
 var unitDistance = 10;
@@ -112,6 +113,7 @@ for(let i = 0; i < rows; i++) {
       var latitude = topLeft.latitude - unitLatitude * i;
       var p = new Position(longitude, latitude);
       if(polygon.contains(p)) {
+         pointsInPolygon.push([i,j]);
          discretePolygon[i][j] = "*";
          area += 1;
       } else {
@@ -119,6 +121,9 @@ for(let i = 0; i < rows; i++) {
       }
    }
 }
+
+var xyPoint = pointsInPolygon[Math.floor(Math.random() * pointsInPolygon.length)];
+discretePolygon[xyPoint[0]][xyPoint[1]] = "X";
 
 function printGrid(grid) {
    for(var i = 0; i < grid.length; i++) {
@@ -131,7 +136,6 @@ function printGrid(grid) {
 }
 
 printGrid(discretePolygon);
-console.log("area is " + area + " * 100 sq meters");
 
 
 
