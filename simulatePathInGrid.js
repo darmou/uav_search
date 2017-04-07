@@ -129,19 +129,127 @@ var latitude = topLeft.latitude - unitLatitude * xyPoint[0];
 var startXY = {i: xyPoint[0], j: xyPoint[1]};
 var start = new Position(longitude, latitude);
 
+function discretePolygonWrapper(discretePolygon, unitLatitude, unitLongitude, unitDistance, topLeftPosition) {
+  this.data = discretePolygon;
+  this.unitLatitude = unitLatitude;
+  this.unitLongitude = unitLongitude;
+  this.unitDistance = unitDistance;
+  this.topLeftPosition = topLeftPosition;
+  this.pointsInPolygon = [];
+  this.POD = 0.5;
 
-var xyPoint = pointsInPolygon[Math.floor(Math.random() * pointsInPolygon.length)];
-var longitude = topLeft.longitude + unitLongitude * xyPoint[1];
-var latitude = topLeft.latitude - unitLatitude * xyPoint[0];
-var destinationXY = {i: xyPoint[0], j: xyPoint[1]};
-var destination = new Position(longitude, latitude);
-//discretePolygon[xyPoint[0]][xyPoint[1]] = "X";
+  for(var i = 0; i < this.data.length; i++) {
+      for(var j = 0; j < this.data[i].length; j++) {
+         if(this.data[i][j] != 0) {
+            this.pointsInPolygon.push([i,j]);
+         }
+      }
+   }
 
-console.log("start is ");
-console.log(start);
-console.log("destionation is ");
-console.log(destination);
-console.log(getDiscretePath(start, destination, unitDistance));
+  this.randomPosition = function() {
+      var xyPoint = this.pointsInPolygon[Math.floor(Math.random() * this.pointsInPolygon.length)];
+      var longitude = this.topLeftPosition.longitude + this.unitLongitude * xyPoint[1];
+      var latitude = this.topLeftPosition.latitude - this.unitLatitude * xyPoint[0];
+      var destination = new Position(longitude, latitude);
+      destination.i = xyPoint[0];
+      destination.j = xyPoint[1];
+      return destination;
+   } 
+
+   this.update = function(resource) {
+      // brute force is to look at everything. we can actually examine how long it takes and then do it better
+      for(var i = 0; i < this.data.length; i++) {
+         for(var j = 0; j < this.data[i].length; j++) {
+            if(0 == this.data[i][j]) continue;
+            var longitude = this.topLeftPosition.longitude + this.unitLongitude * j;
+            var latitude = this.topLeftPosition.latitude - this.unitLatitude * i;
+            var position = new Position(longitude, latitude);
+            if(resource.inSweepWidth(position)) {
+               this.data[i][j] = (1 - this.POD) * this.data[i][j];
+            }
+         }
+      }
+   }
+
+   this.score = function() {
+      var sum = 0;
+      for(var i = 0; i < this.data.length; i++) {
+         for(var j = 0; j < this.data[i].length; j++) {
+            sum += this.data[i][j];
+         }
+      } 
+      return sum;
+   }
+
+   this.print = function(transform) {
+      for(var i = 0; i < this.data.length; i++) {
+         for(var j = 0; j < this.data[i].length; j++) {
+            process.stdout.write(String(transform(this.data[i][j], i, j)));
+            process.stdout.write(" ");
+         }
+         process.stdout.write("\n");
+      }
+   }
+}
+
+var dpw = new discretePolygonWrapper(discretePolygon, unitLatitude, 
+                                                        unitLongitude, unitDistance, topLeft);
+
+
+//var originalScore = scoreDiscretePolygon(discretePolygon);
+var originalScore = dpw.score();
+var current = start;
+var iterations = 1;
+var resource = new Resource();
+/*
+for(var k = 0; k < iterations; k++) {
+   //console.log('in iteration ' + k);
+   resource.setPosition(current);
+   var xyPoint = pointsInPolygon[Math.floor(Math.random() * pointsInPolygon.length)];
+   var longitude = topLeft.longitude + unitLongitude * xyPoint[1];
+   var latitude = topLeft.latitude - unitLatitude * xyPoint[0];
+   var destinationXY = {i: xyPoint[0], j: xyPoint[1]};
+   var destination = new Position(longitude, latitude);
+
+   let positions = getDiscretePath(current, destination, unitDistance);
+   resource.setOrientation(destination);
+   for(var i = 0; i < positions.length; i++) {
+      resource.setPosition(positions[i]);
+      updateDiscreteSubarea(discretePolygon, resource, unitLatitude, unitLongitude, topLeft); 
+   }
+   current = destination;
+}
+*/
+for(var k = 0; k < iterations; k++) {
+   //console.log('in iteration ' + k);
+   resource.setPosition(current);
+   var destination = dpw.randomPosition();
+
+   let positions = getDiscretePath(current, destination, dpw.unitDistance);
+   resource.setOrientation(destination);
+   for(var i = 0; i < positions.length; i++) {
+      resource.setPosition(positions[i]);
+      dpw.update(resource);
+   }
+   current = destination;
+}
+
+//printGrid(discretePolygon, asSymbolsGenerator(startXY, destinationXY));
+//printGrid(discretePolygon, exploredPath);
+//printGrid(discretePolygon, asSymbolsGeneratorWithTransform(startXY, destinationXY, exploredPathAsSymbols));
+dpw.print(asSymbolsGenerator(startXY, current));
+dpw.print(exploredPath);
+dpw.print(asSymbolsGeneratorWithTransform(startXY, current, exploredPathAsSymbols));
+//var finalScore = scoreDiscretePolygon(discretePolygon);
+var finalScore = dpw.score();
+console.log("percentage explored is " + Math.round(100 * (1 - finalScore / originalScore)));
+
+
+//console.log("start is ");
+//console.log(start);
+//console.log("destionation is ");
+//console.log(destination);
+//console.log(getDiscretePath(start, destination, unitDistance));
 
 function identity(x) {
    return x;
@@ -190,6 +298,20 @@ function asSymbolsGeneratorWithTransform(startXY, destinationXY, transform) {
    };
 }
 
+// might be helpful to mark positions along our path as 0, 1, 2, ...
+// however, there is a chance of overlap - visiting the same position more than once, which screws this up
+// I don't think this has much value now so I'll leave this commented out
+//function asSymbolsGeneratorWithTransform(positions, transform) {
+//   return function(data, i, j) {
+//      if(startXY.i === i && startXY.j === j) {
+//         return "S";
+//      }
+//      if(destinationXY.i === i && destinationXY.j === j) {
+//         return "D";
+//      }
+//      return transform(data);
+//   };
+//}
 
 function printGrid(grid, transformationFn) {
    for(var i = 0; i < grid.length; i++) {
@@ -201,6 +323,16 @@ function printGrid(grid, transformationFn) {
    }
 }
 
+
+function scoreDiscretePolygon(discretePolygon) {
+   var sum = 0;
+   for(var i = 0; i < discretePolygon.length; i++) {
+      for(var j = 0; j < discretePolygon[i].length; j++) {
+         sum += discretePolygon[i][j];
+      }
+   } 
+   return sum;
+}
 
 
 //printGrid(discretePolygon, identity);
@@ -220,20 +352,6 @@ function Resource() {
    }
 }
 
-var resource = new Resource();
-resource.setPosition(start);
-
-let positions = getDiscretePath(start, destination, unitDistance);
-resource.setOrientation(destination);
-for(var i = 0; i < positions.length; i++) {
-   resource.setPosition(positions[i]);
-   updateDiscreteSubarea(discretePolygon, resource, unitLatitude, unitLongitude, topLeft); // will update probabilities
-}
-printGrid(discretePolygon, asSymbolsGenerator(startXY, destinationXY));
-printGrid(discretePolygon, exploredPath);
-//printGrid(discretePolygon, exploredPathAsSymbols);
-printGrid(discretePolygon, asSymbolsGeneratorWithTransform(startXY, destinationXY, exploredPathAsSymbols));
-//path.append(nextPoint)
 
 function getDiscretePath(currentPosition, nextPosition, unitDistance) {
    // gjt takes coordinates in [lat, long] form
