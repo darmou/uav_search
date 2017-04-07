@@ -146,7 +146,7 @@ function discretePolygonWrapper(discretePolygon, unitLatitude, unitLongitude, un
       }
    }
 
-  this.randomPosition = function() {
+   this.randomPosition = function() {
       var xyPoint = this.pointsInPolygon[Math.floor(Math.random() * this.pointsInPolygon.length)];
       var longitude = this.topLeftPosition.longitude + this.unitLongitude * xyPoint[1];
       var latitude = this.topLeftPosition.latitude - this.unitLatitude * xyPoint[0];
@@ -155,6 +155,13 @@ function discretePolygonWrapper(discretePolygon, unitLatitude, unitLongitude, un
       destination.j = xyPoint[1];
       return destination;
    } 
+
+   this.ijCoordinatesToPosition = function(i, j) {
+      var longitude = this.topLeftPosition.longitude + this.unitLongitude * j;
+      var latitude = this.topLeftPosition.latitude - this.unitLatitude * i;
+      var position = new Position(longitude, latitude);
+      return position;
+   }
 
    this.update = function(resource) {
       // brute force is to look at everything. we can actually examine how long it takes and then do it better
@@ -192,6 +199,24 @@ function discretePolygonWrapper(discretePolygon, unitLatitude, unitLongitude, un
    }
 }
 
+function hillClimb(position, dpw) {
+   var i = position.i;
+   var j = position.j;
+   var maxij = [i, j];
+   var maxValue = dpw.data[i][j];
+   for(var a = i-1; a <= i+1; a++) {
+      for(var b = j-1; b <= j+1; b++) {
+         if(Array.isArray(dpw.data[a]) && Boolean(dpw.data[a][b])) {
+            if(dpw.data[a][b] > maxValue) {
+               maxValue = dpw.data[a][b];
+               maxij = [a,b];
+            }
+         }  
+      }
+   }
+   return dpw.ijCoordinatesToPosition(maxij[0], maxij[1]);
+}
+
 var dpw = new discretePolygonWrapper(discretePolygon, unitLatitude, 
                                                         unitLongitude, unitDistance, topLeft);
 
@@ -199,31 +224,14 @@ var dpw = new discretePolygonWrapper(discretePolygon, unitLatitude,
 //var originalScore = scoreDiscretePolygon(discretePolygon);
 var originalScore = dpw.score();
 var current = start;
-var iterations = 1;
+var iterations = 10;
 var resource = new Resource();
-/*
+var selectPosition = hillClimb;
+//var selectPosition = identity;
 for(var k = 0; k < iterations; k++) {
    //console.log('in iteration ' + k);
    resource.setPosition(current);
-   var xyPoint = pointsInPolygon[Math.floor(Math.random() * pointsInPolygon.length)];
-   var longitude = topLeft.longitude + unitLongitude * xyPoint[1];
-   var latitude = topLeft.latitude - unitLatitude * xyPoint[0];
-   var destinationXY = {i: xyPoint[0], j: xyPoint[1]};
-   var destination = new Position(longitude, latitude);
-
-   let positions = getDiscretePath(current, destination, unitDistance);
-   resource.setOrientation(destination);
-   for(var i = 0; i < positions.length; i++) {
-      resource.setPosition(positions[i]);
-      updateDiscreteSubarea(discretePolygon, resource, unitLatitude, unitLongitude, topLeft); 
-   }
-   current = destination;
-}
-*/
-for(var k = 0; k < iterations; k++) {
-   //console.log('in iteration ' + k);
-   resource.setPosition(current);
-   var destination = dpw.randomPosition();
+   var destination = selectPosition(dpw.randomPosition(), dpw);
 
    let positions = getDiscretePath(current, destination, dpw.unitDistance);
    resource.setOrientation(destination);
