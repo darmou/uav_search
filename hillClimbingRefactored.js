@@ -211,6 +211,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
 
    function update(resource) {
       // brute force is to look at everything. we can actually examine how long it takes and then do it better
+      /*
       for(var i = 0; i < that.data.length; i++) {
          for(var j = 0; j < that.data[i].length; j++) {
             if(0 == that.data[i][j]) continue;
@@ -222,6 +223,38 @@ function discretePolygonWrapper(polygon, unitDistance) {
             }
          }
       }
+      */
+      attachIJCoordinates(resource.position);
+      var minI = 0;
+      var maxI = that.data.length;
+      var minJ = 0;
+      var maxJ = that.data[0].length;
+      if(!isNaN(resource.radiusHint) && resource.radiusHint !== Infinity) {
+         var indexRadius = Math.ceil(resource.radiusHint / unitDistance);
+         minI = resource.position.i - indexRadius;
+         maxI = resource.position.i + indexRadius;
+         minJ = resource.position.j - indexRadius;
+         maxJ = resource.position.j + indexRadius;
+      }
+      updateWithHint(resource, minI, maxI, minJ, maxJ);
+   }
+
+   function isValidIJ(i, j) {
+      return Array.isArray(that.data[i]) && !isNaN(that.data[i][j]);
+   }
+
+   function updateWithHint(resource, minI, maxI, minJ, maxJ) {
+      for(var i = minI; i < maxI; i++) {
+         for(var j = minJ; j < maxJ; j++) {
+            if(!isValidIJ(i, j)) continue;
+            if(0 == that.data[i][j]) continue;
+            var position = that.ijCoordinatesToPosition(i, j);
+            if(resource.inSweepWidth(position)) {
+               that.data[i][j] = (1 - that.POD) * that.data[i][j];
+            }
+         }
+      }
+
    }
 
    this.score = function() {
@@ -243,12 +276,6 @@ function discretePolygonWrapper(polygon, unitDistance) {
          process.stdout.write("\n");
       }
    }
-
-   var hello = "hello";
-   this.sayHello = function() {
-      console.log(hello);
-   }
-   this.sayHello();
 
    this.getArea = function() {
       return pointsInPolygon.length;
@@ -392,6 +419,10 @@ function Resource() {
    this.setOrientation = function(destination) {
       this.orientation = 0; // do nothing for now
    }
+
+   // error in computing position from offset could be innacurate to (1/2 unit distance) * sqrt(2)
+   // to be safe you will want to set you hint to account for this
+   this.radiusHint = 20; 
 }
 
 var polygon = new Polygon(input);
@@ -403,10 +434,10 @@ var dpw = new discretePolygonWrapper(polygon, unitDistance);
 var start = dpw.randomPosition();
 
 var originalScore = dpw.score();
-var iterations = 10;
+var iterations = 100;
 var resource = new Resource();
 resource.setPosition(start);
-//dpw.selectPositionImpl = hillClimb;
+dpw.selectPositionImpl = hillClimb;
 dpw.explore(resource, iterations);
 var end = resource.position; 
 console.log('path is ' + resource.path.length + ' long');
