@@ -131,9 +131,6 @@ function discretePolygonWrapper(polygon, unitDistance) {
    //console.log('In discretePolygonWrapper constructor');
    //console.log(polygon);
    //console.log(unitDistance);
-   //console.log(bb);
-   //console.log('rows is ' + rows);
-   //console.log('cols is ' + cols);
 
    var that = this;  // for private methods to have access to this
 
@@ -154,7 +151,6 @@ function discretePolygonWrapper(polygon, unitDistance) {
 
    function getDiscretePath(currentPosition, nextPosition) {
       // gjt takes coordinates in [lat, long] form
-      //console.log('that.unitDistance is ' + that.unitDistance);
       // this complexify function makes a sequence of points separated by at most a distance we specify
       // i've found that the accuracy of the distance between two consecutive points is accurate to
       // up to half a meter.
@@ -169,20 +165,15 @@ function discretePolygonWrapper(polygon, unitDistance) {
    }
 
    function selectPosition() {
-      //console.log('in selectPosition');
-      return that.selectPositionImpl.apply(that);
+      return that.selectPositionImpl.call(that);
    }
 
    this.selectPositionImpl = function() {
-      //console.log('in selectPositionImpl');
       return this.randomPosition();
    }
 
-   // later rather than iterations we'd want to do flight time
    this.explore = function(resource, iterations) {
-      //console.log('in explore');
       for(var k = 0; k < iterations; k++) {
-         //var destination = this.randomPosition(); // later change to this.selectPosition
          var destination = selectPosition(); // later change to this.selectPosition
 
          var positions = getDiscretePath(resource.position, destination);
@@ -210,20 +201,6 @@ function discretePolygonWrapper(polygon, unitDistance) {
    }
 
    function update(resource) {
-      // brute force is to look at everything. we can actually examine how long it takes and then do it better
-      /*
-      for(var i = 0; i < that.data.length; i++) {
-         for(var j = 0; j < that.data[i].length; j++) {
-            if(0 == that.data[i][j]) continue;
-            var longitude = that.topLeftPosition.longitude + that.unitLongitude * j;
-            var latitude = that.topLeftPosition.latitude - that.unitLatitude * i;
-            var position = new Position(longitude, latitude);
-            if(resource.inSweepWidth(position)) {
-               that.data[i][j] = (1 - that.POD) * that.data[i][j];
-            }
-         }
-      }
-      */
       attachIJCoordinates(resource.position);
       var minI = 0;
       var maxI = that.data.length;
@@ -254,7 +231,6 @@ function discretePolygonWrapper(polygon, unitDistance) {
             }
          }
       }
-
    }
 
    this.score = function() {
@@ -313,15 +289,20 @@ function hillClimb() {
    var j = position.j;
    var maxij = [i, j];
    var maxValue = this.data[i][j];
-   for(var a = i-1; a <= i+1; a++) {
-      for(var b = j-1; b <= j+1; b++) {
-         if(Array.isArray(this.data[a]) && Boolean(this.data[a][b])) {
-            if(this.data[a][b] > maxValue) {
-               //console.log('selecting better point in hill climbing');
-               maxValue = this.data[a][b];
-               maxij = [a,b];
-            }
-         }  
+   var continueHillClimb = true;
+   while(continueHillClimb) {
+      continueHillClimb = false;
+      for(var a = i-1; a <= i+1; a++) {
+         for(var b = j-1; b <= j+1; b++) {
+            if(Array.isArray(this.data[a]) && Boolean(this.data[a][b])) { // use isValidIJ ?
+               if(this.data[a][b] > maxValue) {
+                  //console.log('selecting better point in hill climbing');
+                  maxValue = this.data[a][b];
+                  maxij = [a,b];
+                  continueHillClimb = true;
+               }
+            }  
+         }
       }
    }
    return this.ijCoordinatesToPosition(maxij[0], maxij[1]);
@@ -411,7 +392,6 @@ function Resource() {
    this.inSweepWidthImpl = function(position) {
       //console.log(this.position);
       //console.log(position);
-      //console.log(this.position.distanceFrom(position));
       var radius = 10; // meters
       return this.position.distanceFrom(position) <= radius;
    }
