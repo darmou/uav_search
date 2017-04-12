@@ -15,19 +15,30 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
    this.startPosition = startPosition;
    this.endPosition = endPosition;
 
+   console.log('unit distance chosen is ' + this.unitDistance + ' meters. This is how far apart your grid squares are in simulation');
+   console.log('start position is [' + this.startPosition.longitude + ', ' + this.startPosition.latitude + ']');
+   console.log('end position is [' + this.endPosition.longitude + ', ' + this.endPosition.latitude + ']');
+   console.log('you have ' + this.areaWrappers.length + ' distinct areas from which you can search on');
+
    // soral processing can be done here.
    var that = this;
-   function extendWithAllocations() {
-      console.log('extending allocations on area wrappers');
-      var allocation = .5;
-      that.areaWrappers.forEach(function(areaWrapper) {
+   this.setAllocations = function(setAllocationsImpl) {
+      //console.log('extending allocations on area wrappers');
+      // how should i implement pluggable aspect?
+      // pass i parameters i think will be helpful, or use the Function.call function
+      setAllocationsImpl.call(this, this.areaWrappers);
+   }
+
+   // this will set allocation property on each of the area wrappers
+   function setDefaultAllocations(areaWrappers) {
+      var allocation = 1 / areaWrappers.length;
+      areaWrappers.forEach(function(areaWrapper) {
          areaWrapper.allocation = allocation;
-         allocation = allocation / 2;
       });
    }
 
    function createDiscreteAreas() {
-      console.log('createing discrete subareas');
+      //console.log('creating discrete subareas');
       that.areaWrappers.forEach(function(areaWrapper) {
          areaWrapper.discreteArea = new discretePolygonWrapper(areaWrapper.polygon, that.unitDistance);
       });
@@ -35,8 +46,11 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
 
    // same as reset, really
    this.initialize = function() {
-      extendWithAllocations();
+      this.setAllocations(setDefaultAllocations);
       createDiscreteAreas();
+      this.areaWrappers.forEach(function(areaWrapper) {
+         areaWrapper.visited = false;
+      });
       //this.print();
    }
 
@@ -54,19 +68,41 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
       });
    }
 
-   this.score;
+   this.score = 0;
+
+   function selectNextAreaToSearch(resource) {
+      var closestArea = null;
+      var minDistance = Infinity;
+      var minAreaIndex = -1;
+      that.areaWrappers.forEach(function(areaWrapper, index) {
+         if(areaWrapper.visited) {
+            return;
+         }
+         var closestPosition = areaWrapper.discreteArea.closestPositionInArea(resource.position);
+         var distance = closestPosition.distanceFrom(resource.position);
+         if(distance < minDistance) {
+           closestArea = areaWrapper; 
+           minDistance = distance;
+           minAreaIndex = index;
+         }
+      });
+      console.log('you just selected the area with index ' + minAreaIndex);
+      return closestArea;
+   }
 
    // the way we score this is percentage of area explored weighted by allocation
    // all the allocations should add to some positive number no greater than 1
    // contribution of subarea score is percentage explored times allocation
    // this score should add to some number between 0 and 100.
    this.explore = function(resource) {
-      console.log('in explore(resource) for UAVPathPlanner');
+      console.log('about to explore the entire area with our resource');
+      //console.log('in explore(resource) for UAVPathPlanner');
       this.score = 0;
       var totalFlightTime = resource.flightTimeRemaining;
-      console.log('total flight time is ')
+      //console.log('total flight time is ')
+      console.log('total flight time is ' + totalFlightTime + ' seconds');
       //console.log('total flight time is ' + totalFlightTime);
-      console.log(totalFlightTime);
+      //console.log(totalFlightTime);
       // the resource should have some initial position
       resource.travelTo(this.startPosition);
       // we want to sort allocations by allocation variable from high to low
@@ -74,23 +110,28 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
       // like... after we explore, we look at the closest next polygon
       // maybe this can be user configured?
       // right now this explores areas in order of highest allocations
-      this.areaWrappers.sort(function(a, b) {
-         a.allocation - b.allocation;
-      });
 
-      this.areaWrappers.forEach(function(areaWrapper) {
-         console.log('area allocation is ' + areaWrapper.allocation);
-         var discreteArea = areaWrapper.discreteArea;
-         var areaFlightTime = areaWrapper.allocation * totalFlightTime;
-         console.log('area flight time is ' + areaFlightTime);
+      var areaToSearch = selectNextAreaToSearch(resource);
+      while(areaToSearch !== null) {
+         console.log('about to search subarea');
+         areaToSearch.discreteArea.print(exploredPathAsSymbols);
+         console.log(areaToSearch);
+         //console.log('area allocation is ' + areaToSearch.allocation);
+         var discreteArea = areaToSearch.discreteArea;
+         var areaFlightTime = areaToSearch.allocation * totalFlightTime;
+         console.log('time we will spend in area is ' + areaFlightTime + ' seconds');
          discreteArea.explore(resource, areaFlightTime); 
 
-         // score has to be weighted by alloction and area, i think.
+         // score has to be weighted by alloction and probability of area, i think.
          // maybe i should only return a normalized score?
          // like percentage explored?
-         that.score += discreteArea.normalizedScore() * areaWrapper.allocation;
-         console.log(that.score);
-      });
+         var scoreContribution = discreteArea.normalizedScore() * areaToSearch.POA;
+         console.log('we just explored ' + discreteArea.normalizedScore() + ' percent of our subarea with POA of ' + areaToSearch.POA);
+         that.score += scoreContribution;
+         console.log('score contribution is ' + scoreContribution);
+         areaToSearch.visited = true;
+         var areaToSearch = selectNextAreaToSearch(resource);
+      }
 
       resource.travelTo(this.endPosition);
       console.log('score is: ' + Math.round(this.score));
@@ -182,7 +223,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
    }
 
    this.closestPositionInArea = function(targetPosition) {
-      console.log('in closestPositionToArea');
+      //console.log('in closestPositionToArea');
       var closestDistance = Infinity;
       var closestPosition;
       var t = this;
@@ -243,10 +284,11 @@ function discretePolygonWrapper(polygon, unitDistance) {
    // ugh. lots of edge cases when we don't want to travel and stuff.
    // returns the modified flight time
    function transportResourceToArea(resource, areaFlightTime) {
-         console.log('in transportResourceToArea() for discretePolygonWrapper');
+         console.log('moving resource to the closest position in the subarea before starting the search');
+         //console.log('in transportResourceToArea() for discretePolygonWrapper');
          var start = that.closestPositionInArea(resource.position); 
-         console.log('closest position is');
-         console.log(start);
+         //console.log('closest position is');
+         //console.log(start);
          var timeToTravelToArea = resource.timeToTravelTo(start);
          if(timeToTravelToArea < areaFlightTime && resource.canMoveTo(start)) {
             resource.travelTo(start);
@@ -262,8 +304,9 @@ function discretePolygonWrapper(polygon, unitDistance) {
 
    this.explore = function(resource, areaFlightTime) {
       // we need to transport the resource within our bounding box
-      console.log('in explore() for discretePolygonWrapper');
+      //console.log('in explore() for discretePolygonWrapper');
       areaFlightTime = transportResourceToArea(resource, areaFlightTime);
+      console.log('searching the interior of the subarea');
       var iterations = 0;
       var canContinueExploring = true;
       while(canContinueExploring) {
@@ -279,19 +322,19 @@ function discretePolygonWrapper(polygon, unitDistance) {
          // position when making our resource travel along a path.
          for(var i = 2; i < positions.length; i++) {
             var timeToFlyToPosition = resource.timeToTravelTo(positions[i]);
-            console.log('flight time remaining ' + resource.flightTimeRemaining);
+            //console.log('flight time remaining ' + resource.flightTimeRemaining);
             if(timeToFlyToPosition > areaFlightTime) {
-               console.log('flight time is over for subarea');
+               //console.log('flight time is over for subarea');
                canContinueExploring = false;
                break;
             }
             if(!resource.canMoveTo(positions[i])) {
-               console.log('we need to go home now');
+               //console.log('we need to go home now');
                canContinueExploring = false;
                break;
             }
             if(!resource.travelTo(positions[i])) { 
-               console.log('flight time is over for resource');
+               //console.log('flight time is over for resource');
                canContinueExploring = false;
                break;
             }
@@ -299,7 +342,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
             update(resource);
          }
       }
-      console.log('there were ' + iterations + ' iterations');
+      console.log('Search of subarea complete. There were ' + iterations + ' iterations of our algorithm.');
    }
 
 
@@ -347,8 +390,10 @@ function discretePolygonWrapper(polygon, unitDistance) {
    }
 
    // a normalized score would just be a percentage of the area explored
+   // the lower the score, the more we have explored
+   // adding up all the values of the grid squares tells us how much we HAVEN'T explored
    this.normalizedScore = function() {
-      return Math.round((this.score() / pointsInPolygon.length) * 100);
+      return Math.round((1 - (this.score() / pointsInPolygon.length)) * 100);
    }
 
    this.print = function(transform) {
@@ -564,11 +609,22 @@ var basePosition = areaWrappers[0].polygon.positions[0];
 var start = basePosition;
 var end = basePosition;
 var pathPlanner = new UAVPathPlanner(areaWrappers, unitDistance, start, end);
+var weightedAllocations = function(areaWrappers) {
+   var totalPOA = 0;
+   areaWrappers.forEach(function(areaWrapper) {
+      totalPOA += areaWrapper.POA;
+   });
+   areaWrappers.forEach(function(areaWrapper) {
+      areaWrapper.allocation = areaWrapper.POA / totalPOA;
+   });
+};
+
+pathPlanner.setAllocations(weightedAllocations);
 pathPlanner.setPointSelectionImplementation(hillClimb); // untested
 //console.log(pathPlanner.areaWrappers);
 
 // we want to see initial state
-pathPlanner.print();
+//pathPlanner.print();
 
 var speed = 10; // in meters/second
 var flightTime = 1200; // 20 minutes
@@ -584,13 +640,15 @@ resource.addConstraint(canFlyToDestination);
 pathPlanner.explore(resource);
 
 // now this is the final state
+console.log('Here is an ascii view of how much of our subares we explored (not in any particular order)');
 pathPlanner.print();
 
-console.log('distance travelled: ' + Math.round(resource.distanceTraveled));
-console.log('time spent flying: ' + Math.round(resource.distanceTraveled / resource.speed));
-console.log('path length ' + resource.path.length);
-console.log('normalized score: ' + Math.round(pathPlanner.score));
-console.log('distance from UAV and endpoint: ' + resource.position.distanceFrom(end));
+console.log('FINAL METRICS:');
+console.log('distance resource travelled: ' + Math.round(resource.distanceTraveled) + ' meters');
+console.log('time resource spent travelling: ' + Math.round(resource.distanceTraveled / resource.speed) + ' seconds');
+console.log('size of array with gps coordinates of path: ' + resource.path.length);
+console.log('There is a ' + Math.round(pathPlanner.score) + ' percent chance the target will be found in this path');
+console.log('distance from resource and our specified endpoint: ' + resource.position.distanceFrom(end) + ' meters');
 
 
 
