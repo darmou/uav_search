@@ -240,6 +240,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
       return this.randomPosition();
    }
 
+   // ugh. lots of edge cases when we don't want to travel and stuff.
    // returns the modified flight time
    function transportResourceToArea(resource, areaFlightTime) {
          console.log('in transportResourceToArea() for discretePolygonWrapper');
@@ -247,9 +248,17 @@ function discretePolygonWrapper(polygon, unitDistance) {
          console.log('closest position is');
          console.log(start);
          var timeToTravelToArea = resource.timeToTravelTo(start);
-         resource.travelTo(start);
-         return areaFlightTime - timeToTravelToArea;
-   } 
+         if(timeToTravelToArea < areaFlightTime && resource.canMoveTo(start)) {
+            resource.travelTo(start);
+            return areaFlightTime - timeToTravelToArea;
+         } else {
+            console.log('we cant travel to polygon');
+            console.log(resource.flightTimeRemaining);
+            console.log(timeToTravelToArea);
+            console.log(areaFlightTime);
+            return 0;
+         }
+   }
 
    this.explore = function(resource, areaFlightTime) {
       // we need to transport the resource within our bounding box
@@ -270,8 +279,14 @@ function discretePolygonWrapper(polygon, unitDistance) {
          // position when making our resource travel along a path.
          for(var i = 2; i < positions.length; i++) {
             var timeToFlyToPosition = resource.timeToTravelTo(positions[i]);
+            console.log('flight time remaining ' + resource.flightTimeRemaining);
             if(timeToFlyToPosition > areaFlightTime) {
                console.log('flight time is over for subarea');
+               canContinueExploring = false;
+               break;
+            }
+            if(!resource.canMoveTo(positions[i])) {
+               console.log('we need to go home now');
                canContinueExploring = false;
                break;
             }
@@ -466,12 +481,34 @@ function Resource(speed, flightTime, position) {
    this.flightTimeRemaining = flightTime; // in seconds
    this.speed = speed; // in meters/second
    this.distanceTraveled = 0; // in meters
+   var that = this;
 
    this.timeToTravelTo = function(position) {
       var distance = this.position.distanceFrom(position);
       var timeRequired = distance / this.speed;
       return timeRequired;
-
+   }
+   this.constraints = [];
+   var hasEnoughEffortToMove = function(resource, position) {
+      return resource.timeToTravelTo(position) < resource.flightTimeRemaining;
+   }
+   this.constraints.push(hasEnoughEffortToMove);
+   this.addConstraint = function(constraint) {
+      this.constraints.push(constraint);
+   }
+   // i really need to rename this constraint stuff
+   function checkConstraints(position) {
+      // god this is so confusing.
+      // we're just checking if there's one constraint violated
+      // whatever teh result, we want to return if we can make the move
+      var someConstraintViolated = that.constraints.some(function(isMoveAllowed) {
+         var moveNotAllowed = !isMoveAllowed(that, position);
+         return moveNotAllowed;
+      });
+      return !someConstraintViolated;
+   }
+   this.canMoveTo = function(position) {
+      return checkConstraints(position);
    }
    this.travelTo = function(position) {
       // make sure to return a bool and update fuel
@@ -536,6 +573,14 @@ pathPlanner.print();
 var speed = 10; // in meters/second
 var flightTime = 1200; // 20 minutes
 var resource = new Resource(speed, flightTime, basePosition);
+var canFlyToDestination = function(resouce, position) {
+   var destination = basePosition;
+   var timeToTravelThere = resouce.position.distanceFrom(position) / resouce.speed;
+   var timeToTravelToDestination = position.distanceFrom(destination) / resouce.speed;
+   var totalTime = timeToTravelThere + timeToTravelToDestination;
+   return totalTime <= resource.flightTimeRemaining;
+}
+resource.addConstraint(canFlyToDestination);
 pathPlanner.explore(resource);
 
 // now this is the final state
