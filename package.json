@@ -4,11 +4,17 @@
   "description": "Find multiple search paths",
   "main": "calculate_random_point_on_polygon.js",
   "dependencies": {
+    "bluebird": "^3.5.0",
+    "express": "^4.15.2",
     "geolib": "^2.0.22",
     "gmaps": "^0.4.24",
-    "xrange": "^1.0.1",
     "geojson-utils": "^1.1.0",
-    "geojson-tools": "^0.2.2"
+    "geojson-tools": "^0.2.2",
+    "mongoose": "^4.9.2",
+    "sqlite": "^2.5.0",
+    "swagger-express-mw": "^0.1.0",
+    "xrange": "^1.0.1",
+    "yayson": "^2.0.3"
   },
   "devDependencies": {},
   "scripts": {
