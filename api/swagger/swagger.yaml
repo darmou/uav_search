@@ -1,0 +1,292 @@
+swagger: "2.0"
+info:
+  version: "0.0.1"
+  title: UAV search Application
+# during dev, should point to your local machine
+host: localhost:10010
+# basePath prefixes all resource paths 
+basePath: /
+# 
+schemes:
+  # tip: remove http to make production-grade
+  - http
+  - https
+# format of bodies a client can send (Content-Type)
+consumes:
+  - application/json
+# format of the responses to the client (Accepts)
+produces:
+  - application/json
+paths:
+  /submit_search_data:
+    # binds a127 app logic to a route
+    x-swagger-router-controller: uav_search_endpoints
+    post:
+      description: A set of uav search paths to the caller
+      # used as the method name of the controller
+      operationId: submit_search_data
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/FeatureCollection"
+      responses:
+        "200":
+          description: Success
+          schema:
+            # a pointer to a definition
+            $ref: "#/definitions/SuccessResponse"
+        # responses may fall through to errors
+        default:
+          description: Error
+          schema:
+            $ref: "#/definitions/Error"
+  /define_settings:
+    # binds a127 app logic to a route
+    x-swagger-router-controller: uav_search_endpoints
+    post:
+      description: Define some settings for the UAV pathfinder
+      # used as the method name of the controller
+      operationId: define_settings
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/Settings"
+      responses:
+        "200":
+          description: Success
+          schema:
+            # a pointer to a definition
+            $ref: "#/definitions/SuccessResponse"
+        # responses may fall through to errors
+        default:
+          description: Error
+          schema:
+            $ref: "#/definitions/Error"
+  /swagger:
+    x-swagger-pipe: swagger_raw
+
+
+# complex objects have schema definitions
+definitions:
+  Error:
+    required:
+      - code
+      - message
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+  Geometry:
+    type: object
+    description: GeoJSon geometry
+    discriminator: type
+    required:
+      - type
+    externalDocs:
+      url: http://geojson.org/geojson-spec.html#geometry-objects
+    properties:
+      type:
+        type: object
+        description: the geometry type
+#  GeometryCollection:
+#    title: GeometryCollection
+#    description: A collection of geometry objects
+#    required:
+#    - geometries
+#    properties:
+#      type:
+#        enum:
+#        - GeometryCollection
+#      geometries:
+#        type: array
+#        items:
+#          "$ref": http://json-schema.org/geojson/geometry.json#
+  Feature:
+    title: Feature
+    description: A Geo JSON feature object
+    required:
+    - geometry
+    - properties
+    properties:
+      type:
+        enum:
+        - Feature
+      geometry:
+        $ref: "#/definitions/Geometry"
+      properties:
+        $ref: "#/definitions/featureProperties"
+
+  Settings:
+    title: settings for UAV System
+    description: JSON list of settings
+    type: object
+    properties:
+      start_point:
+        description: Start point for drone
+        $ref: "#/definitions/Point2D"
+      end_point:
+        description: Finish point for drone after path is completed
+        $ref: "#/definitions/Point2D"
+      total_flight_time:
+        description: Time in minutes
+        type: number
+
+  featureProperties:
+    title: feature property
+    description: A list of properties for our feature for when a FeatureCollection is submitted to find a list of possible paths
+    type: object
+    properties:
+      POA:
+        description: Probabilty Of Area
+        type: number
+      area:
+        description: ???
+        type: number
+
+  FeatureCollection:
+    title: FeatureCollection
+    description: A Geo JSON feature collection
+    required:
+    - features
+    properties:
+      type:
+        enum:
+        - FeatureCollection
+      features:
+        type: array
+        items:
+          $ref: "#/definitions/Feature"
+
+
+  Point2D:
+    type: array
+    description: 2d array with longitude, latitude in that order
+    maxItems: 2
+    minItems: 2
+    items:
+      type: number
+
+  Point:
+    type: object
+    description: GeoJSon geometry
+    externalDocs:
+      url: http://geojson.org/geojson-spec.html#id2
+    allOf:
+      - $ref: "#/definitions/Geometry"
+      - properties:
+          coordinates:
+            $ref: "#/definitions/Point2D"
+
+  LineString:
+    type: object
+    description: GeoJSon geometry
+    externalDocs:
+      url: http://geojson.org/geojson-spec.html#id3
+    allOf:
+      - $ref: "#/definitions/Geometry"
+      - properties:
+          coordinates:
+            type: array
+            items:
+              $ref: "#/definitions/Point2D"
+
+  Polygon:
+    type: object
+    description: GeoJSon geometry
+    externalDocs:
+      url: http://geojson.org/geojson-spec.html#id4
+    allOf:
+      - $ref: "#/definitions/Geometry"
+      - properties:
+          coordinates:
+            type: array
+            items:
+              type: array
+              items:
+                $ref: "#/definitions/Point2D"
+  MultiPoint:
+    type: object
+    description: GeoJSon geometry
+    externalDocs:
+      url: http://geojson.org/geojson-spec.html#id5
+    allOf:
+     - $ref: "#/definitions/Geometry"
+     - properties:
+          coordinates:
+            type: array
+            items:
+              $ref: '#/definitions/Point2D'
+
+  MultiLineString:
+    type: object
+    description: GeoJSon geometry
+    externalDocs:
+      url: http://geojson.org/geojson-spec.html#id6
+    allOf:
+     - $ref: "#/definitions/Geometry"
+     - properties:
+          coordinates:
+            type: array
+            items:
+              type: array
+              items:
+                $ref: "#/definitions/Point2D"
+
+
+  MultiPolygon:
+    type: object
+    description: GeoJSon geometry
+    externalDocs:
+      url: http://geojson.org/geojson-spec.html#id6
+    allOf:
+      - $ref: "#/definitions/Geometry"
+      - properties:
+          coordinates:
+            type: array
+            items:
+              type: array
+              items:
+                type: array
+                items:
+                  $ref: "#/definitions/Point2D"
+
+
+
+#  GeometryCollection:
+#    type: object
+#    description: GeoJSon geometry collection
+#    required:
+#    - type
+#    - geometries
+#    externalDocs:
+#      url: http://geojson.org/geojson-spec.html#geometrycollection
+#      properties:
+#      type:
+#        type: string
+#        enum:
+#        - GeometryCollection
+#        description: geometry collection
+#      geometries:
+#        type: array
+#        items:
+#          $ref: '#/definitions/Geometry'
+            
+  SuccessResponse:
+    required:
+      - message
+    properties:
+      message:
+        type: string
