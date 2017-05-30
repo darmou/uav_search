@@ -83,42 +83,50 @@ function Polygon(pointArray) {
    }
 }
 
-var area = 0;
-var polygon = new Polygon(input);
-var unitDistance = 10;
-var left = polygon.positions[0].longitude;
-var right = polygon.positions[0].longitude;
-var top = polygon.positions[0].latitude;
-var bottom = polygon.positions[0].latitude;
-for(let i = 0; i < polygon.positions.length; i++) {
-   let point = polygon.positions[i];
-   left = Math.min(left, point.longitude);
-   right = Math.max(right, point.longitude);
-   bottom = Math.min(bottom, point.latitude);
-   top = Math.max(top, point.latitude);
+
+
+function processPolygon(input) {
+    var area = 0;
+    var polygon = new Polygon(input);
+    var unitDistance = 10;
+    var left = polygon.positions[0].longitude;
+    var right = polygon.positions[0].longitude;
+    var top = polygon.positions[0].latitude;
+    var bottom = polygon.positions[0].latitude;
+    for(let i = 0; i < polygon.positions.length; i++) {
+        let point = polygon.positions[i];
+        left = Math.min(left, point.longitude);
+        right = Math.max(right, point.longitude);
+        bottom = Math.min(bottom, point.latitude);
+        top = Math.max(top, point.latitude);
+    }
+    var topLeft = new Position(left, top);
+    var topRight = new Position(right, top);
+    var bottomLeft = new Position(left, bottom);
+    var rows = Math.ceil(topLeft.distanceFrom(bottomLeft) / unitDistance);
+    var cols =  Math.ceil(topLeft.distanceFrom(topRight) / unitDistance);
+    var unitLongitude = Math.abs(topLeft.longitude - topRight.longitude) /cols;
+    var unitLatitude = Math.abs(topLeft.latitude - bottomLeft.latitude) / rows;
+    var discretePolygon = [];
+    for(let i = 0; i < rows; i++) {
+        discretePolygon[i] = [];
+        for(let j = 0; j < cols; j++) {
+            var longitude = topLeft.longitude + unitLongitude * j;
+            var latitude = topLeft.latitude - unitLatitude * i;
+            var p = new Position(longitude, latitude);
+            if(polygon.contains(p)) {
+                discretePolygon[i][j] = "*";
+                area += 1;
+            } else {
+                discretePolygon[i][j] = " ";
+            }
+        }
+    }
+
+    printGrid(discretePolygon);
+    console.log("area is " + area + " * 100 sq meters");
 }
-var topLeft = new Position(left, top);
-var topRight = new Position(right, top);
-var bottomLeft = new Position(left, bottom);
-var rows = Math.ceil(topLeft.distanceFrom(bottomLeft) / unitDistance);
-var cols =  Math.ceil(topLeft.distanceFrom(topRight) / unitDistance); 
-var unitLongitude = Math.abs(topLeft.longitude - topRight.longitude) /cols;
-var unitLatitude = Math.abs(topLeft.latitude - bottomLeft.latitude) / rows;
-var discretePolygon = [];
-for(let i = 0; i < rows; i++) {
-   discretePolygon[i] = [];
-   for(let j = 0; j < cols; j++) {
-      var longitude = topLeft.longitude + unitLongitude * j;
-      var latitude = topLeft.latitude - unitLatitude * i;
-      var p = new Position(longitude, latitude);
-      if(polygon.contains(p)) {
-         discretePolygon[i][j] = "*";
-         area += 1;
-      } else {
-         discretePolygon[i][j] = " ";
-      }
-   }
-}
+
 
 function printGrid(grid) {
    for(var i = 0; i < grid.length; i++) {
@@ -130,8 +138,7 @@ function printGrid(grid) {
    }
 }
 
-printGrid(discretePolygon);
-console.log("area is " + area + " * 100 sq meters");
+module.exports.processPolygon = processPolygon;
 
 
 

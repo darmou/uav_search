@@ -1,8 +1,7 @@
 'use strict';
-//import Promise from 'bluebird';
 var Promise = require("bluebird");
 var db = require("sqlite");
-//import db from 'sqlite';
+var polygonToGrid = require('../../polygonToGrid');
 
 
 /*
@@ -42,69 +41,91 @@ module.exports = {
   Param 2: a handle to the response object
  */
 function submit_search_data(req, res) {
-  // variables defined in the Swagger document can be referenced using req.swagger.params.{parameter_name}
-    let json = JSON.parse(req.body);
+  // variables defined in
+    // the Swagger document can be referenced using req.swagger.params.{parameter_name}
+
+    let json = req.body;
+
          let type = json.type;
+
          if(type === "FeatureCollection") {
              //We have a list of polygons
              let features = json.features;
-             features.map((feature) =>  {
 
+             features.map((feature) =>  {
+                 console.log("Feature");
+                 console.log(feature.geometry.coordinates[0]);
+                 polygonToGrid.processPolygon(feature.geometry.coordinates[0]);
              });
 
          }
+
+    res.sendStatus(200);
 }
 
-function update_sql(my_var, var_name, sql) {
-    if(sql.length > 0) {
-        sql += " AND ";
-    }
-    sql += my_var + ""
+function wrap_value(value) {
+    return (isNaN(value)) ?  "'" + value + "'" : value;
+}
+
+function update_sql(settings) {
+    let sql = "update settings set ";
+    Object.keys(settings).map((key, index) => {
+        sql += key + "=" +  wrap_value(settings[key]) + ",";
+    });
+    sql = sql.substr(0,sql.length-1) + " where id=1";
+    return sql;
 }
 
 function find_existing_settings() {
     try {
-
-            db.get('SELECT * FROM settings');
-
+            db.get('SELECT * FROM settings').then((res) => {
+                if(typeof (res) === "undefined") {
+                    return null;
+                } else {
+                    return res;
+                }
+            });
 
     } catch (err) {
         next(err);
     }
 }
 
-function  insert_into_sql() {
-    let settings = JSON.parse(req.body);
+function  insert_into_sql(settings) {
     let sql = "insert into settings (";
     let key_list = "id, "; //Always insert into id
     let val_list = "1, ";
-    Object.keys(settings).map(function(key, index) {
-        //settings[key]
-        key_list += key + ",";
-        val_list += settings[key];
+    Object.keys(settings).map((key, index) => {
+        key_list += key + ", ";
+        val_list += wrap_value(settings[key]) + ", ";
     });
     key_list = key_list.substr(0, key_list.length -2);
-    val_list = key_list.substr(0, key_list.length -2);
-    sql += key_list + ") values (" + val_list + ");"
-    console.log(sql);
-    //db.run(sql);
+    val_list = val_list.substr(0, val_list.length -2);
+    sql += key_list + ") values (" + val_list + ");";
+
+    return sql;
 
 }
 
 function  define_settings(req, res) {
 
 
+    let settings = req.body;
 
     try {
 
-
         db.get('SELECT * FROM settings;').then((res) => {
+            let sql ="";
             if(typeof (res) === "undefined") {
                 //Nothing in there yet so lets insert
-                insert_into_sql(req);
+               sql =  insert_into_sql(settings);
             } else {
                 //Need to update
+                console.log(res);
+                sql = update_sql(settings);
             }
+            console.log(sql);
+            db.run(sql);
         }).catch(err => console.error(err.stack));
 
 
@@ -113,25 +134,7 @@ function  define_settings(req, res) {
         console.log(err);
         //next(err);
     }
-    /*  Promise.resolve()
-          .then(());
-    db.get('SELECT * FROM Category');*/
-    /*let settings = JSON.parse(req.body);
-    //We can have start_point, end_point and total_flight_time
-    //Lets see if there are already some settings
-    let search_sql  = "select  * from settings";
 
 
-    let update_sql = '';
-    if(settings.hasOwnProperty('start_point')) {
-        update_sql += "start_point=" + settings.start_point;
-    }
-    if(settings.hasOwnProperty('end_point')) {
-
-        update_sql += "start_point=" + settings.end_point;
-    }
-    if(settings.hasOwnProperty('total_flight_time')) {
-        let total_flight_time = settings.total_flight_time;
-    }*/
     res.sendStatus(200);
 }

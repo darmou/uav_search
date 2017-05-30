@@ -42,6 +42,8 @@ var db = require("sqlite");
 
 var SwaggerExpress = require('swagger-express-mw');
 var app = require('express')();
+
+
 module.exports = app; // for testing
 
 var config = {
@@ -67,7 +69,7 @@ SwaggerExpress.create(config, function(err, swaggerExpress) {
         .finally(() => app.listen(port));
     //app.listen(port);
 
-    if (swaggerExpress.runner.swagger.paths['/submit_search_data']) {
+    if (swaggerExpress.runner.swagger.paths['/submit_search_data','/define_settings']) {
         console.log('try this:\ncurl http://127.0.0.1:' + port + '/submit_search_data');
     }
 });

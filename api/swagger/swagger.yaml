@@ -4,9 +4,9 @@ info:
   title: UAV search Application
 # during dev, should point to your local machine
 host: localhost:10010
-# basePath prefixes all resource paths 
+# basePath prefixes all resource paths
 basePath: /
-# 
+#
 schemes:
   # tip: remove http to make production-grade
   - http
@@ -34,7 +34,7 @@ paths:
           in: body
           required: true
           schema:
-            $ref: "#/definitions/FeatureCollection"
+            $ref: "#/definitions/Inputs"
       responses:
         "200":
           description: Success
@@ -99,8 +99,16 @@ definitions:
       url: http://geojson.org/geojson-spec.html#geometry-objects
     properties:
       type:
-        type: object
+        type: string
+        enum:
+        - Point
+        - LineString
+        - Polygon
+        - MultiPoint
+        - MultiLineString
+        - MultiPolygon
         description: the geometry type
+
 #  GeometryCollection:
 #    title: GeometryCollection
 #    description: A collection of geometry objects
@@ -128,6 +136,21 @@ definitions:
         $ref: "#/definitions/Geometry"
       properties:
         $ref: "#/definitions/featureProperties"
+
+  Inputs:
+    title: Inputs for UAV System
+    description: JSON list of geojson
+    type: object
+    properties:
+      type:
+        type: string
+        enum:
+        - FeatureCollection
+      features:
+        description: List of Polygons to explore
+        type: array
+        items:
+          type: object
 
   Settings:
     title: settings for UAV System
@@ -283,7 +306,7 @@ definitions:
 #        type: array
 #        items:
 #          $ref: '#/definitions/Geometry'
-            
+
   SuccessResponse:
     required:
       - message
