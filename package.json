@@ -10,6 +10,7 @@
     "geolib": "^2.0.22",
     "gmaps": "^0.4.24",
     "mongoose": "^4.9.2",
+    "jsdom": "*",
     "sqlite": "^2.5.0",
     "swagger-express-mw": "^0.1.0",
     "xrange": "^1.0.1",
