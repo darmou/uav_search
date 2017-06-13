@@ -1,30 +1,48 @@
-The tldr; we compute a path for a UAV to follow to maximize the probability it will find its target
+**tldr;** we compute a path for a UAV to follow to maximize the probability it will find its target
 
-Slightly long tldr; We have a set of geopolygons for which our target might be in. Each geopolygon has a different probability that the target is contained within it. Furthermore, each geopolygon might have different properties which affect how easy it is to find our target. For example, lots of trees might obscure the view of the ground. Each geopolygon is supposed to represent some homogenous area of land. We have a single resouce (our UAV) which has a special camera that can see some area in front of it with some probability of detecting our target if we are looking at it. We want to compute some path that the UAV can fly in that will maximize target detection. The images taken by the UAV are examined later, so we want to UAV to fly around until it runs out of fuel.
+Slightly long tldr; We have a set of geopolygons for which our target might be in. Each geopolygon has a different probability that the target is contained within it. Furthermore, each geopolygon might have different properties which affect how easy it is to find our target. For example, lots of trees might obscure the view of the ground. Each geopolygon is supposed to represent some homogenous area of land. We have a single resouce (our UAV) which has a special camera that can see some area in front of it with some probability of detecting our target if we are looking at it. We want to compute some path that the UAV can fly in that will maximize target detection. The images taken by the UAV are examined later, so we want to UAV to fly around until it runs out of energy.
 
 
-The input:
-   Data in a format TBD, but at the least it should contain:
+# The input:
 
-      * vertices for a geopolygon (points must specify longitude, latitude).
-      * the probability the target is in a given geopolygon
-      * maybe the total area of the geopolygon, though technically we can compute it or approximate it ourselves
+## UAV
+* flight time [s] (default = 1800s?)
+* flight speed [m/s] (1 m/s?)
+* flight height-above-ground [m] (30m?)
+* camera tilt [º] [0º?]
+  * range: [-45,45]?  [0,45]?  [0,90]?
+  * resolution: 1º, 5º, 15º?
+* launch point (lat/lon)
+* landing point (lat/lon) (start point?)
+* _Camera FOV as radius or angle or ...?_
+  * W is an abstract measure, but we have a path
+  * So we can approximate a lateral range curve 
+  * If we know something about camera footprint
 
-Some other information not passed as input but relevant:
+## Search Region
+* Bounding polygon — UAV must stay within
+  * Vertices as lat/lon
+* List of Subregions each with:
+  * Vertices of geopolygon (lat/lon)
+  * Area [m^2] (though could be calculated from geopoly)
+  * W for this UAV / altitude / speed [m]
+  * PSR - probable success rate [Hz, ie 1/s]
+  * POA - probability of area [nonnegative float] (though could be calculated 
+$$POA = PSR*A / (W*v)$$)
 
-   The resource:
+## Sweep Widths
+* If we assume a single UAV-altitude-speed-tilt then:
+  * one W for each region
+  * can be sent as part of region or as a table under UAV
+* If we assume multiple UAVs each with fixed altitude-speed-tilt:
+  * Then a UAV-by-region table of Ws
+  * Maybe better to think of as a separate object
+* If we allow choice of best altitude/speed/tilt per UAV
+  * Then we need to extend SORAL to handle mutual exclusivity
+  * And would have to supply larger tables
 
-      * For our purposes, a drone
-      * How much effort (time) is available for the resource to search
-      * How fast the UAV can travel (all units are SI, so meters per second)
-      * Sweep width 
-         This is really function which tells us if certain geocoordinates are within the view of the camera
-      * Radius hint
-         We know nothing about the details of the sweep width and if we know the radius from the UAV where viewable objects are bounded, we can reduce the computation time by not looking things we know are too far away to be viewable. This variable might eventually become part of the sweep width.
-   Hill climbing algorithm
-      * I'll get more into this later, but it's relevant when searching a given subarea so we reduce overlap
 
-The output:
+# The output:
    A path of geocoordinates. Elements need to specify longitude and latitude
 
 High level overview of how we approached the problem:
@@ -37,36 +55,37 @@ High level overview of how we approached the problem:
       First we want our resource to travel to some point within the polygon. Doesn't really matter where so we just choose the closest point.
       Until our resouce has exhausted the time available, it does the following steps:
 
-         1. compute some random point in our polygon
-         2. use hill climbing repeatedly to find a point that has been "less" explored (so higher probability target is there)
-         3. travel to it, exploring points in our polygon as we travel
-         4. repeat
+1. compute some random point in our polygon
+2. use hill climbing repeatedly to find a point that has been "less" explored (so higher probability target is there)
+3. travel to it, exploring points in our polygon as we travel
+4. repeat
 
-   So what we're doing is:
+# So what we're doing is:
 
-      1. select the closest unvisited geopolygon
-      2. explore that geopolygon for some period of time that's determined by SORAL
-      3. repeat until no unvisited polygons exist
+1. select the closest unvisited geopolygon
+2. explore that geopolygon for some period of time that's determined by SORAL
+3. repeat until no unvisited polygons exist
 
 The challenging part was discretizing the polygon and finding a way to update the cells as the drone travelled. 
+
+## Discretizing the polygon
 Here's how we approached discretizing the geopolygon:
 
-   1. find a bounding box for the polygon where the bounds were latitude and longitude (note: this will break for special edge cases, but we're not in Antartica or on the prime meridian)
-   2. given a unit distance (the spacing between grid cells), we computed unit longitude and unit latitude
-      unit longitude is just how much of a longitude differential was equal the unit distance, if latitude was fixed
-         fyi, our drone will probably only be able to fly for 20 minutes, so the obvious limitations here don't matter. Our bounding box should be pretty small.
-      same thing for unit latitude, it's how much of a latitude differential was equal to the unit distance, if longitude was fixed
-   3. The number of rows was Math.ceil() of the height in longitude divided by the unit longitude
-       The number of columns was Math.ceil() of the width in latitude divided by the unit latitude
-   4. Knowing some fixed point (here, the top left position of our bounding box as geocoordinates) as (0,0)...
-         we can compute the closest (i, j) approximation of some geocoordinate
-         for a given (i,j), we can convert it into its geocoordinate equivalent
-   5. Now for each (i,j) in our bounding box, we compute the geocoordinate equivalent and check if it's within our polygon
-         if it is, we mark grid[i][j] as 1
-         otherwise, we mark grid[i][j] as 0
-         This is about probabilities of finding our target.
-   6. The percentage explored of our area is (1 * (sum of all cell values) / (count of all cells initialized to 1)) * 100.
+1. Find a bounding box for the polygon where the bounds were latitude and longitude (note: this will break for special edge cases, but we're not in Antartica or on the prime meridian)
+2. Given a unit distance (the spacing between grid cells), we computed unit longitude and unit latitude. Unit longitude is just how much of a longitude differential was equal the unit distance, if latitude was fixed.
+  * Note: our drone will probably only be able to fly for 20 minutes, so the obvious limitations here don't matter. Our bounding box should be pretty small.)
+  * Same thing for unit latitude, it's how much of a latitude differential was equal to the unit distance, if longitude was fixed.
+3. The number of rows was `Math.ceil()` of the height in longitude divided by the unit longitude. The number of columns was `Math.ceil()` of the width in latitude divided by the unit latitude.
+4. Knowing some fixed point (here, the top left position of our bounding box as geocoordinates) as (0,0)...
+  * we can compute the closest (i, j) approximation of some geocoordinate
+  * for a given (i,j), we can convert it into its geocoordinate equivalent
+5. Now for each (i,j) in our bounding box, we compute the geocoordinate equivalent and check if it's within our polygon
+  * if it is, we mark grid[i][j] as 1
+  * otherwise, we mark grid[i][j] as 0
+  * This is about probabilities of finding our target.
+6. The percentage explored of our area is (1 * (sum of all cell values) / (count of all cells initialized to 1)) * 100.
 
+## Searching the geopolygon
 Here's how we approached exploring our geopolygon with a resource
 
    1. First we transport our resource to the closest position that has a non*zero value within our discretized grid
@@ -88,6 +107,7 @@ Here's how we approached exploring our geopolygon with a resource
                We're basically pretending that we never see our target when we update grid cells
    5. repeat steps b*d.
 
+# Limitations
 What are some limitations of this project?
 
    1. No handing of edge cases for geocoordinate computations. This is a prototype and we're looking to see if it works. Things will be fine in North America.
@@ -103,12 +123,13 @@ What are some limitations of this project?
    5. Visiting the distinct geopolygons is very similar to the travelling salesman problem, and we use a simple approximation.
          If the number of geopolygons were to be very large, how we traverse them might factor into the performance
 
+# Cool Features
 What are some cool features about this project?
 
    1. A lot of things are customizable. You can try new things out and see how it affects performance without major changes to the code.
       Here are some things you can customize:
 
-What's customizeable?
+## What's customizeable?
 
    1. Selecting a destination point to fly to when searching a subarea:
       * select random position in geopolygon
@@ -128,7 +149,7 @@ What's customizeable?
          This is super helpful for testing
       * use "    " and "\d\d\d\d" to represent 0 probability areas and non*zero probability areas with their current probability
 
-Setting the settings:
+## Setting the settings:
     If running it on localhost you can use curl or Postman.
 http://127.0.0.1:10010/define_settings/
 ```
