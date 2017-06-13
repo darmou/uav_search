@@ -1,6 +1,9 @@
 {
   "name": "uav_search",
   "version": "1.0.0",
+  "engines": {
+    "node": "6.2.1"
+  },
   "description": "Find multiple search paths",
   "main": "server.js",
   "dependencies": {
