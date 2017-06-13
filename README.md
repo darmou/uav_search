@@ -10,14 +10,14 @@ Slightly long tldr; We have a set of geopolygons for which our target might be i
 * flight speed [m/s] (1 m/s?)
 * flight height-above-ground [m] (30m?)
 * camera tilt [º] [0º?]
-   * range: [-45,45]?  [0,45]?  [0,90]?
-   * resolution: 1º, 5º, 15º?
+    * range: [-45,45]?  [0,45]?  [0,90]?
+    * resolution: 1º, 5º, 15º?
 * launch point (lat/lon)
 * landing point (lat/lon) (start point?)
 * _Camera FOV as radius or angle or ...?_
-   * W is an abstract measure, but we have a path
-   * So we can approximate a lateral range curve 
-   * If we know something about camera footprint
+   - W is an abstract measure, but we have a path
+   - So we can approximate a lateral range curve 
+   - If we know something about camera footprint
 
 ## Search Region
 * Bounding polygon — UAV must stay within
