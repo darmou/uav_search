@@ -1,5 +1,6 @@
 var gju = require('geojson-utils');
 var gjt = require('geojson-tools');
+var dbFunctions = require('./api/controllers/db.js');
 
 function AreaWrapper(pointArray, POA, area) {
    this.polygon = new Polygon(pointArray);
@@ -596,59 +597,77 @@ function Resource(speed, flightTime, position) {
 
 var input ={"type":"FeatureCollection","features":[{"type":"Feature","properties":{"POA":0.01,"area":2.3},"geometry":{"type":"Polygon","coordinates":[[[-80.01574516296387,38.40840605494758],[-80.01372814178467,38.40840605494758],[-80.01372814178467,38.41005383575983],[-80.01574516296387,38.41005383575983],[-80.01574516296387,38.40840605494758]]]}},{"type":"Feature","properties":{"POA":0.04,"area":0.4},"geometry":{"type":"Polygon","coordinates":[[[-80.01372814178467,38.41008746354846],[-80.01372814178467,38.40840605494758],[-80.01424312591551,38.406522830869775],[-80.01274108886719,38.4072963038403],[-80.01218318939209,38.406152906088074],[-80.01209735870361,38.41106266261135],[-80.01372814178467,38.41008746354846]]]}},{"type":"Feature","properties":{"POA":0.1,"area":0.3},"geometry":{"type":"Polygon","coordinates":[[[-80.01222610473633,38.406152906088074],[-80.01068115234375,38.40527853089542],[-80.01020908355713,38.40719541653097],[-80.01115322113037,38.407800738274325],[-80.00990867614746,38.408338797789796],[-80.01093864440918,38.40924676413821],[-80.01042366027832,38.41039011294187],[-80.01205444335938,38.41106266261135],[-80.01222610473633,38.406152906088074]]]}},{"type":"Feature","properties":{"POA":0.2,"area":0.7661791},"geometry":{"type":"Polygon","coordinates":[[[-80.01033782958984,38.41039011294187],[-80.01093864440918,38.40928039230239],[-80.00982284545898,38.40837242637651],[-80.00784873962402,38.409952952300074],[-80.01033782958984,38.41039011294187]]]}},{"type":"Feature","properties":{"POA":0.09,"area":0.12999},"geometry":{"type":"Polygon","coordinates":[[[-80.00754833221436,38.40944853288866],[-80.00917911529541,38.40813702594095],[-80.00977993011475,38.407800738274325],[-80.00947952270508,38.40722904564973],[-80.00699043273926,38.406993641489834],[-80.00754833221436,38.40944853288866]]]}},{"type":"Feature","properties":{"POA":0.1,"area":1.1},"geometry":{"type":"Polygon","coordinates":[[[-80.00977993011475,38.40342885620873],[-80.00733375549316,38.40342885620873],[-80.00733375549316,38.40564846015252],[-80.00977993011475,38.40564846015252],[-80.00977993011475,38.40342885620873]]]}},{"type":"Feature","properties":{"POA":0.08,"area":".7"},"geometry":{"type":"Polygon","coordinates":[[[-80.00982284545898,38.4056820899911],[-80.0073766708374,38.4056820899911],[-80.00699043273926,38.40692638301762],[-80.00947952270508,38.40722904564973],[-80.00982284545898,38.4056820899911]]]}}]}; 
 
-var areaWrappers = input.features.map(function(feature) {
-   var POA = feature.properties.POA;
-   var area = feature.properties.area;
-   var pointArray = feature.geometry.coordinates[0]; 
-   return new AreaWrapper(pointArray, POA, area);
-});
+
+function calculatePathsForInput(input) {
+    var areaWrappers = input.features.map(function(feature) {
+        var POA = feature.properties.POA;
+        var area = feature.properties.area;
+        var pointArray = feature.geometry.coordinates[0];
+        return new AreaWrapper(pointArray, POA, area);
+    });
 //console.log(areaWrappers);
 
-var unitDistance = 10;
-var basePosition = areaWrappers[0].polygon.positions[0];
-var start = basePosition;
-var end = basePosition;
-var pathPlanner = new UAVPathPlanner(areaWrappers, unitDistance, start, end);
-var weightedAllocations = function(areaWrappers) {
-   var totalPOA = 0;
-   areaWrappers.forEach(function(areaWrapper) {
-      totalPOA += areaWrapper.POA;
-   });
-   areaWrappers.forEach(function(areaWrapper) {
-      areaWrapper.allocation = areaWrapper.POA / totalPOA;
-   });
-};
+    var unitDistance = 10;
+    var basePosition = areaWrappers[0].polygon.positions[0];
+    var start = basePosition;
+    var end = basePosition;
+    var pathPlanner = new UAVPathPlanner(areaWrappers, unitDistance, start, end);
+    var weightedAllocations = function(areaWrappers) {
+        var totalPOA = 0;
+        areaWrappers.forEach(function(areaWrapper) {
+            totalPOA += areaWrapper.POA;
+        });
+        areaWrappers.forEach(function(areaWrapper) {
+            areaWrapper.allocation = areaWrapper.POA / totalPOA;
+        });
+    };
 
-pathPlanner.setAllocations(weightedAllocations);
-pathPlanner.setPointSelectionImplementation(hillClimb); // untested
+    pathPlanner.setAllocations(weightedAllocations);
+    pathPlanner.setPointSelectionImplementation(hillClimb); // untested
 //console.log(pathPlanner.areaWrappers);
 
 // we want to see initial state
 //pathPlanner.print();
+    dbFunctions.findExistingSettings().then(function (res) {
+         console.log("Settings");
+         console.log(res);
+         var speed = 10; // in meters/second
+         var flightTime = 1200; // 20 minutes
+         if(typeof (res) !== "undefined") {
+            speed = res.uav_speed;
+            flightTime = res.total_flight_time;
+         }
+         console.log(flightTime);
+         var resource = new Resource(speed, flightTime, basePosition);
+         var canFlyToDestination = function(resouce, position) {
+             var destination = basePosition;
+             var timeToTravelThere = resouce.position.distanceFrom(position) / resouce.speed;
+             var timeToTravelToDestination = position.distanceFrom(destination) / resouce.speed;
+             var totalTime = timeToTravelThere + timeToTravelToDestination;
+             return totalTime <= resource.flightTimeRemaining;
+         }
+         resource.addConstraint(canFlyToDestination);
+         pathPlanner.explore(resource);
 
-var speed = 10; // in meters/second
-var flightTime = 1200; // 20 minutes
-var resource = new Resource(speed, flightTime, basePosition);
-var canFlyToDestination = function(resouce, position) {
-   var destination = basePosition;
-   var timeToTravelThere = resouce.position.distanceFrom(position) / resouce.speed;
-   var timeToTravelToDestination = position.distanceFrom(destination) / resouce.speed;
-   var totalTime = timeToTravelThere + timeToTravelToDestination;
-   return totalTime <= resource.flightTimeRemaining;
+   // now this is the final state
+         console.log('Here is an ascii view of how much of our subares we explored (not in any particular order)');
+         pathPlanner.print();
+
+         console.log('FINAL METRICS:');
+         console.log('distance resource travelled: ' + Math.round(resource.distanceTraveled) + ' meters');
+         console.log('time resource spent travelling: ' + Math.round(resource.distanceTraveled / resource.speed) + ' seconds');
+         console.log('size of array with gps coordinates of path: ' + resource.path.length);
+         console.log('There is a ' + Math.round(pathPlanner.score) + ' percent chance the target will be found in this path');
+         console.log('distance from resource and our specified endpoint: ' + resource.position.distanceFrom(end) + ' meters');
+
+
+    });
+
+
 }
-resource.addConstraint(canFlyToDestination);
-pathPlanner.explore(resource);
 
-// now this is the final state
-console.log('Here is an ascii view of how much of our subares we explored (not in any particular order)');
-pathPlanner.print();
+module.exports.calculatePathsForInput = calculatePathsForInput;
 
-console.log('FINAL METRICS:');
-console.log('distance resource travelled: ' + Math.round(resource.distanceTraveled) + ' meters');
-console.log('time resource spent travelling: ' + Math.round(resource.distanceTraveled / resource.speed) + ' seconds');
-console.log('size of array with gps coordinates of path: ' + resource.path.length);
-console.log('There is a ' + Math.round(pathPlanner.score) + ' percent chance the target will be found in this path');
-console.log('distance from resource and our specified endpoint: ' + resource.position.distanceFrom(end) + ' meters');
 
 
 

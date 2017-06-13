@@ -1,8 +1,9 @@
 'use strict';
 var Promise = require("bluebird");
-var db = require("sqlite");
 var polygonToGrid = require('../../polygonToGrid');
-
+var simulatePathWithoutSoral = require('../../simulatePathWithoutSORAL');
+var dbFunctions = require('./db');
+var db = require("sqlite");
 
 /*
  'use strict' is not required but helpful for turning syntactical errors into true errors in the program flow
@@ -29,10 +30,7 @@ var util = require('util');
   In the starter/skeleton project the 'get' operation on the '/hello' path has an operationId named 'hello'.  Here,
   we specify that in the exports of this module that 'hello' maps to the function named 'hello'
  */
-module.exports = {
-  submit_search_data: submit_search_data,
-  define_settings:   define_settings
-};
+
 
 /*
   Functions in a127 controllers used for operations should take two parameters:
@@ -50,62 +48,14 @@ function submit_search_data(req, res) {
 
          if(type === "FeatureCollection") {
              //We have a list of polygons
-             let features = json.features;
-
-             features.map((feature) =>  {
-                 console.log("Feature");
-                 console.log(feature.geometry.coordinates[0]);
-                 polygonToGrid.processPolygon(feature.geometry.coordinates[0]);
-             });
-
+             simulatePathWithoutSoral.calculatePathsForInput(json);
          }
 
     res.sendStatus(200);
 }
 
-function wrap_value(value) {
-    return (isNaN(value)) ?  "'" + value + "'" : value;
-}
 
-function update_sql(settings) {
-    let sql = "update settings set ";
-    Object.keys(settings).map((key, index) => {
-        sql += key + "=" +  wrap_value(settings[key]) + ",";
-    });
-    sql = sql.substr(0,sql.length-1) + " where id=1";
-    return sql;
-}
 
-function find_existing_settings() {
-    try {
-            db.get('SELECT * FROM settings').then((res) => {
-                if(typeof (res) === "undefined") {
-                    return null;
-                } else {
-                    return res;
-                }
-            });
-
-    } catch (err) {
-        next(err);
-    }
-}
-
-function  insert_into_sql(settings) {
-    let sql = "insert into settings (";
-    let key_list = "id, "; //Always insert into id
-    let val_list = "1, ";
-    Object.keys(settings).map((key, index) => {
-        key_list += key + ", ";
-        val_list += wrap_value(settings[key]) + ", ";
-    });
-    key_list = key_list.substr(0, key_list.length -2);
-    val_list = val_list.substr(0, val_list.length -2);
-    sql += key_list + ") values (" + val_list + ");";
-
-    return sql;
-
-}
 
 function  define_settings(req, res) {
 
@@ -118,11 +68,11 @@ function  define_settings(req, res) {
             let sql ="";
             if(typeof (res) === "undefined") {
                 //Nothing in there yet so lets insert
-               sql =  insert_into_sql(settings);
+               sql =  dbFunctions.insertIntoSQL(settings);
             } else {
                 //Need to update
                 console.log(res);
-                sql = update_sql(settings);
+                sql = dbFunctions.updateSQL(settings);
             }
             console.log(sql);
             db.run(sql);
@@ -138,3 +88,10 @@ function  define_settings(req, res) {
 
     res.sendStatus(200);
 }
+
+
+module.exports = {
+    submit_search_data: submit_search_data,
+    define_settings:   define_settings,
+    lastName: 'Bond'
+};
