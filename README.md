@@ -27,15 +27,16 @@
 
 ## Search Regions
 
-The phrase "search regions" is vague. We define some specific alternatives.
-
 # Terminology
+First some region terms.
+
 * **Search Area**: The _entire_ area that needs to be searched.  _Much_ larger than is typically sent to `uav_search` at one time.  For our purposes in FIND we typically use the 95% ring from the IPP (horizontal displacement model).
 * **Planning Region**:  These are very large areas typically used in the Mattson consensus process, breaking the search into about a dozen pieces.
 * **Searchable Segments**:  This is the **actual area that a search resource will be tasked to search**.  In the case of a UAV, this might represent a single sortie, or possibly a few battery changes. But if we are defining the flight time by the battery duration, then each sortie can become the searchable segment from the air.
 * **Autosegments**: FIND automatically creates segments based upon findable features on the ground from the perspective of a ground team (roads, paths, utility lines, hydrologogy, ridges).  The FIND planner can then combine _autosegments_ to make the _searchable segments_.  However, a UAV isn’t really limited by the autosegments or findable features.  Instead, it can really think of the world as a series of grids and follow coordinates.
 
 And some search theory terms:
+
 * **Sweep Width, _W_** An abstract measure of detectability, with units [m], being the width of a perfect "cookie-cutter" detector which would, on average, detect the same number of targets as our actual sensor.
 * **Area, _A_**: Physical size of the region, in [m^2].
 * **POA, _P_**: Probability of Area - the current subjective probability the subject is in this region, according to our best (averaged) estimate.
