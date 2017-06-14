@@ -1,48 +1,72 @@
 # UAV_SAR for FIND
 
-**tldr;** we compute a path for a UAV to follow to maximize the probability it will find its target
+**tldr;** we compute a UAV flight path to maximize the probability it will find its target
 
 **Slightly long tldr;** We have a set of **regions** which our target might be in. Each region has a different **probability** that the target is contained within it. Furthermore, each region might have different properties which affect how easy it is to find our target. For example, lots of trees might obscure the view of the ground. We have a single UAV with a camera, and known **detectability** for our target, if we are looking at it. We want to compute a **path** the UAV can fly to maximize the probability of target detection. 
   * Because we need a path, the regions are geopolygons.
   * Probability and detectability are assumed constant across the region, before searching begins.
   * We assume little to no analysis can be performed during flight.
 
-# The input:
+-----
+
+# The input [units/default]:
 
 ## UAV
-* flight time [s] (default = 1800s?)
-* flight speed [m/s] (1 m/s?)
-* flight height-above-ground [m] (30m?)
-* camera tilt [º] [0º?]
-    - range: [-45,45]?  [0,45]?  [0,90]?
-    - resolution: 1º, 5º, 15º?
-* launch point (lat/lon)
-* landing point (lat/lon) (start point?)
-* _Camera FOV as radius or angle or ...?_
-    - W is an abstract measure, but we have a path
-    - So we can approximate a lateral range curve 
-    - If we know something about camera footprint
+* flight time [1200s] - _Note: FIND UI will use minutes._
+* flight speed [2 m/s] - ~4mph over full canopy
+* flight height-above-ground [45m] - ~150'
+* camera tilt [0º]
+    - Allow [0..+45] in 5º increments
+    - Allow <0?
+* launch point [lat/lon] - User must set. FIND can default to IPP.
+* landing point [lat/lon] - Default to start point
+* **Camera FOV** - Some description of actual camera footprint
+    - Suggest **angle subtended when pointed straight down**
+    - Allows us to project trapezoid/frustrum
+    - Sets absolute limit of detectability at a given time
 
-## Search Region
-* Bounding polygon — UAV must stay within
-    - Vertices as lat/lon
-* List of Subregions each with:
-    - Vertices of geopolygon (lat/lon)
-    - Area [m^2] (could be calculated from geopoly)
-    - W for this UAV / altitude / speed [m]
-    - PSR - probable success rate - [Hz, ie 1/s]
-    - POA - probability of area - [nonnegative float].  (could be calculated from as (PSR * A) / (W*v)
+## Search Regions
+
+The phrase "search regions" is vague. We define some specific alternatives.
+
+# Terminology
+* **Search Area**: The _entire_ area that needs to be searched.  _Much_ larger than is typically sent to `uav_search` at one time.  For our purposes in FIND we typically use the 95% ring from the IPP (horizontal displacement model).
+* **Planning Region**:  These are very large areas typically used in the Mattson consensus process, breaking the search into about a dozen pieces.
+* **Searchable Segments**:  This is the **actual area that a search resource will be tasked to search**.  In the case of a UAV, this might represent a single sortie, or possibly a few battery changes. But if we are defining the flight time by the battery duration, then each sortie can become the searchable segment from the air.
+* **Autosegments**: FIND automatically creates segments based upon findable features on the ground from the perspective of a ground team (roads, paths, utility lines, hydrologogy, ridges).  The FIND planner can then combine _autosegments_ to make the _searchable segments_.  However, a UAV isn’t really limited by the autosegments or findable features.  Instead, it can really think of the world as a series of grids and follow coordinates.
+
+And some search theory terms:
+* **Sweep Width, _W_** An abstract measure of detectability, with units [m], being the width of a perfect "cookie-cutter" detector which would, on average, detect the same number of targets as our actual sensor.
+* **Area, _A_**: Physical size of the region, in [m^2].
+* **POA, _P_**: Probability of Area - the current subjective probability the subject is in this region, according to our best (averaged) estimate.
+* **Pden, 𝜌**: _P_/_A_, the probability divided by the physical area. The region known as Earth has _very_ high probability, but an _exceedingly_ low Pden. 
+* **PSR**: Probable Success Rate - the rate of change of probability at the start of the search, bigger is better, [Hz, ie 1/s]
+
+With that in mind...
+
+# Search Region Inputs
+* **UAV Area** - the bounding geopoly the UAV _must_ stay within
+    - Provided by FIND, by default equals the Search Area
+    - _But may be smaller_, eg to deconflict multiple UAV planners
+* **UAV Segments** - tiles the UAV Area into sortie-sized pieces that may or may not match the Searchable Segments. Each segment has:
+    - Geopolygon for the border
+    - _A_ (could be calculated from geopoly)
+    - _W_ for this UAV-altitude-speed combo_
+    - _PSR_ 
+    - _P_ (could be calculated from as (PSR * A) / (W*v)
 
 ## Sweep Widths
 * If we assume a single UAV-altitude-speed-tilt then:
-    * one W for each region
+    * one _W_ for each region
     * can be sent as part of region or as a table under UAV
 * If we assume multiple UAVs each with fixed altitude-speed-tilt:
-    * Then a UAV-by-region table of Ws
+    * Then a UAV-by-region table of _W_s
     * Maybe better to think of as a separate object
 * If we allow choice of best altitude/speed/tilt per UAV
     * Then we need to extend SORAL to handle mutual exclusivity
     * And would have to supply larger tables
+
+FIND will eventually have a sweep width table that gives sweep width values or correction factors for things like height, canopy, tilt, speed, visibility. 
 
 
 # The output:
