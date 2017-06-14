@@ -47,11 +47,10 @@ function submit_search_data(req, res) {
          let type = json.type;
 
          if(type === "FeatureCollection") {
-             //We have a list of polygons
-             simulatePathWithoutSoral.calculatePathsForInput(json);
+             simulatePathWithoutSoral.calculatePathsForInput(json, res);
          }
 
-    res.sendStatus(200);
+
 }
 
 
