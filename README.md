@@ -190,9 +190,11 @@ What are some cool features about this project?
 http://127.0.0.1:10010/define_settings/
 ```
 {
-  "start_date": "3/3/2017",
-  "end_date": "3/3/2017",
   "total_flight_time": 99,
-  "uav_speed": 20.1
+  "uav_speed": 20.1,
+  "start_location_lat": -33,
+  "start_location_lng": 288,
+  "end_location_lat": -33,
+  "end_location_lng": 222
 }
 ```

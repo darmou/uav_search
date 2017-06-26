@@ -9,6 +9,8 @@ function findExistingSettings() {
         next(err);
     }
 }
+
+
 function wrapValue(value) {
     return (isNaN(value)) ?  "'" + value + "'" : value;
 }
@@ -23,7 +25,7 @@ function updateSQL(settings) {
     return sql;
 }
 
-function  insertIntoSQL(settings) {
+function insertIntoSQL(settings) {
     let sql = "insert into settings (";
     let key_list = "id, "; //Always insert into id
     let val_list = "1, ";
@@ -36,7 +38,6 @@ function  insertIntoSQL(settings) {
     sql += key_list + ") values (" + val_list + ");";
 
     return sql;
-
 }
 
 module.exports = {

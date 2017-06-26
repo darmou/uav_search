@@ -157,14 +157,23 @@ definitions:
     description: JSON list of settings
     type: object
     properties:
-      start_point:
-        description: Start point for drone
-        $ref: "#/definitions/Point2D"
-      end_point:
-        description: Finish point for drone after path is completed
-        $ref: "#/definitions/Point2D"
+      start_location_lat:
+        description: Start latitude point for drone (default is the first polygon, first point if not specified)
+        type: number
+      start_location_lng:
+        description: Start longitude point for drone (default is the first polygon, first point if not specified)
+        type: number
+      end_location_lat:
+        description: End latitude point for drone (default is the first polygon, first point if not specified)
+        type: number
+      end_location_lng:
+        description: End longitude point for drone (default is the first polygon, first point if not specified)
+        type: number
       total_flight_time:
         description: Time in minutes
+        type: number
+      uav_speed:
+        description: Speed in meters/second
         type: number
 
   featureProperties:

@@ -49,8 +49,6 @@ function submit_search_data(req, res) {
          if(type === "FeatureCollection") {
              simulatePathWithoutSoral.calculatePathsForInput(json, res);
          }
-
-
 }
 
 
@@ -62,8 +60,7 @@ function  define_settings(req, res) {
     let settings = req.body;
 
     try {
-
-        db.get('SELECT * FROM settings;').then((res) => {
+        dbFunctions.findExistingSettings().then((res) => {
             let sql ="";
             if(typeof (res) === "undefined") {
                 //Nothing in there yet so lets insert

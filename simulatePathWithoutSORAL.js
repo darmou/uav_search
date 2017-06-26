@@ -638,19 +638,7 @@ function calculatePathsForInput(input, res) {
     var basePosition = areaWrappers[0].polygon.positions[0];
     var start = basePosition;
     var end = basePosition;
-    var pathPlanner = new UAVPathPlanner(areaWrappers, unitDistance, start, end);
-    var weightedAllocations = function(areaWrappers) {
-        var totalPOA = 0;
-        areaWrappers.forEach(function(areaWrapper) {
-            totalPOA += areaWrapper.POA;
-        });
-        areaWrappers.forEach(function(areaWrapper) {
-            areaWrapper.allocation = areaWrapper.POA / totalPOA;
-        });
-    };
 
-    pathPlanner.setAllocations(weightedAllocations);
-    pathPlanner.setPointSelectionImplementation(hillClimb); // untested
 //console.log(pathPlanner.areaWrappers);
 
 // we want to see initial state
@@ -663,7 +651,31 @@ function calculatePathsForInput(input, res) {
          if(typeof (settings_res) !== "undefined") {
             speed = settings_res.uav_speed;
             flightTime = settings_res.total_flight_time;
+            if(settings_res.start_location_lat) {
+               start.latitude = settings_res.start_location_lat;
+               start.longitude = settings_res.start_location_lng;
+            }
+            if(settings_res.end_position_lat) {
+               end.latitude = settings_res.end_position_lat;
+               end.longitude =  settings_res.end_position_lng;
+            }
+
          }
+
+        var pathPlanner = new UAVPathPlanner(areaWrappers, unitDistance, start, end);
+        var weightedAllocations = function(areaWrappers) {
+            var totalPOA = 0;
+            areaWrappers.forEach(function(areaWrapper) {
+                totalPOA += areaWrapper.POA;
+            });
+            areaWrappers.forEach(function(areaWrapper) {
+                areaWrapper.allocation = areaWrapper.POA / totalPOA;
+            });
+        };
+
+        pathPlanner.setAllocations(weightedAllocations);
+        pathPlanner.setPointSelectionImplementation(hillClimb); // untested
+
          var resource = new Resource(speed, flightTime, basePosition);
          var canFlyToDestination = function(resouce, position) {
              var destination = basePosition;
