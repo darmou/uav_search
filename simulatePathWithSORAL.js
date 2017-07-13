@@ -2,11 +2,26 @@ var gju = require('geojson-utils');
 var gjt = require('geojson-tools');
 var dbFunctions = require('./api/controllers/db.js');
 var GeoJSON = require('geojson');
+var soral=require("/usr/local/lib/soral");
 
-function AreaWrapper(pointArray, POA, area) {
+function AreaWrapper(pointArray, POA, area, speed, ESW) {
    this.polygon = new Polygon(pointArray);
+   if(isNaN(POA)) {
+      throw 'Bad input. POA should be a number.'
+   }
    this.POA = POA;
+   if(isNaN(area)) {
+      throw 'Bad input. Area should be a number.'
+   }
    this.area = area;
+   if(isNaN(speed)) {
+      throw 'Bad input. Speed should be a number.'
+   }
+   this.speed = speed;
+   if(isNaN(ESW)) {
+      throw 'Bad input. ESW should be a number.'
+   }
+   this.ESW = ESW;
 }
 
 // should i have all the discrete polygons in memory?
@@ -72,6 +87,8 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
 
    this.score = 0;
 
+/*
+   // remove once SORAL is integrated
    function selectNextAreaToSearch(resource) {
       var closestArea = null;
       var minDistance = Infinity;
@@ -90,6 +107,70 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
       });
       console.log('you just selected the area with index ' + minAreaIndex);
       return closestArea;
+   }
+*/
+
+   function getAllocations(resource) {
+      console.log('in getAllocations()')
+      console.log(that.areaWrappers)
+      var areas = that.areaWrappers.length;
+      var resources = 1;
+      var area = new soral.doubleArray(areas);
+      var POA =  new soral.doubleArray(areas);
+      var ESW =  new soral.doubleArray(areas);
+      var speed =  new soral.doubleArray(areas);
+
+      // Configure the arrays with some test values
+      for (i = 0; i < areas; i++) {
+         area.setitem(i, that.areaWrappers[i].area);
+         POA.setitem(i,  that.areaWrappers[i].POA);
+         ESW.setitem(i,  that.areaWrappers[i].ESW); 
+         speed.setitem(i, that.areaWrappers[i].speed);
+      }
+
+      var availableHours = new soral.doubleArray(resources);
+      var hoursPerSecond = 1/3600;
+      availableHours.setitem(0, resource.flightTimeRemaining * hoursPerSecond);
+
+      var effectiveness = new soral.Array2D(areas, resources);
+
+      for (var resourceIdx  = 0; resourceIdx < resources; resourceIdx++) {
+         for (var areaIdx = 0; areaIdx < areas; areaIdx++) {
+            var value = ESW.getitem(areaIdx) * speed.getitem(areaIdx) / area.getitem(areaIdx);
+            effectiveness.set(areaIdx, resourceIdx, value);
+         }
+      }
+
+      return soral.newCharnesCooper(resources, areas, effectiveness, availableHours, POA);
+   }
+
+   function selectNextAreaToSearch(resource) {
+      if(!that.theAllocation) {
+         that.theAllocation = getAllocations(resource)
+         that.activeItr = new soral.ActiveAreasIterator(that.theAllocation);
+      } else {
+         that.activeItr.increment();
+      }
+
+      if(that.activeItr.atEnd()) {
+         return null;
+      }
+      var index = that.activeItr.getCurrentActiveAreaNum();
+      var areaToSearch = that.areaWrappers[index];
+      if(areaToSearch.visited) {
+         throw 'Cannot revisit area. This may be an error.'
+      }
+      var areaIndex = that.activeItr.getCurrentActiveAreaNum();
+      var resItr = new soral.ResourceIterator(that.theAllocation, areaIndex);
+      if (resItr.atEnd()) {
+         throw 'No resource exists from which to get the allocation'
+      }
+      var resourceAssignment = resItr.getResourceAssignment();
+      var timeInHours = resourceAssignment.getTime();
+
+      var secondsPerHour = 3600;
+      areaToSearch.allocationAsTime = timeInHours * secondsPerHour;
+      return areaToSearch;
    }
 
    // the way we score this is percentage of area explored weighted by allocation
@@ -120,7 +201,13 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
          console.log(areaToSearch);
          //console.log('area allocation is ' + areaToSearch.allocation);
          var discreteArea = areaToSearch.discreteArea;
-         var areaFlightTime = areaToSearch.allocation * totalFlightTime;
+         var areaFlightTime = null
+         if(areaToSearch.allocationAsTime) {
+            areaFlightTime = areaToSearch.allocationAsTime;
+         } else {
+            console.log('we are not using SORAL. is everything OK?')
+            areaFlightTime = areaToSearch.allocation * totalFlightTime;
+         }
          console.log('time we will spend in area is ' + areaFlightTime + ' seconds');
          discreteArea.explore(resource, areaFlightTime); 
 
@@ -622,8 +709,10 @@ function calculatePathsForInput(input, res) {
     var areaWrappers = input.features.map(function(feature) {
         var POA = feature.properties.POA;
         var area = feature.properties.area;
+        var speed = feature.properties.speed;
+        var ESW = feature.properties.ESW;
         var pointArray = feature.geometry.coordinates[0];
-        return new AreaWrapper(pointArray, POA, area);
+        return new AreaWrapper(pointArray, POA, area, speed, ESW);
     });
 //console.log(areaWrappers);
 

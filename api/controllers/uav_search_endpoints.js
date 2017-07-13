@@ -1,7 +1,7 @@
 'use strict';
 var Promise = require("bluebird");
 var polygonToGrid = require('../../polygonToGrid');
-var simulatePathWithoutSoral = require('../../simulatePathWithoutSORAL');
+var simulatePath = require('../../simulatePathWithSORAL');
 var dbFunctions = require('./db');
 var db = require("sqlite");
 
@@ -47,7 +47,7 @@ function submit_search_data(req, res) {
          let type = json.type;
 
          if(type === "FeatureCollection") {
-             simulatePathWithoutSoral.calculatePathsForInput(json, res);
+             simulatePath.calculatePathsForInput(json, res);
          }
 }
 
