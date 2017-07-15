@@ -2,7 +2,14 @@ var gju = require('geojson-utils');
 var gjt = require('geojson-tools');
 var dbFunctions = require('./api/controllers/db.js');
 var GeoJSON = require('geojson');
-var soral=require("/usr/local/lib/soral");
+var isMac = /^darwin/.test(process.platform);
+var soral;
+if(isMac) {
+   soral = require("./lib/mac/soral");
+} else {
+   soral = require("./lib/linux/soral");
+}
+
 
 function AreaWrapper(pointArray, POA, area, speed, ESW) {
    this.polygon = new Polygon(pointArray);
