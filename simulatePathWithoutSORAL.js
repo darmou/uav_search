@@ -609,7 +609,7 @@ function toGeoJson(resource) {
 
         point = resource.path[pathIdx];
 
-        point_array = [point.latitude, point.longitude];
+        point_array = [point.longitude, point.latitude];
 
         line_array.push(point_array)
     }

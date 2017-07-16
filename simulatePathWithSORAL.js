@@ -88,7 +88,8 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
 
    this.setPointSelectionImplementation = function(impl) {
       this.areaWrappers.forEach(function(areaWrapper) {
-         areaWrapper.selectPositionImpl = impl;
+         areaWrapper.discreteArea.selectPositionImpl = impl;
+         console.log(areaWrapper)
       });
    }
 
@@ -320,6 +321,9 @@ function discretePolygonWrapper(polygon, unitDistance) {
 
    this.closestPositionInArea = function(targetPosition) {
       //console.log('in closestPositionToArea');
+      if (this.positionInArea(targetPosition)) {
+         return targetPosition;
+      }
       var closestDistance = Infinity;
       var closestPosition;
       var t = this;
@@ -349,9 +353,19 @@ function discretePolygonWrapper(polygon, unitDistance) {
       return destination;
    } 
 
-   function attachIJCoordinates(position) {
+   this.attachIJCoordinates = function(position) {
       position.j = Math.round((position.longitude - that.topLeftPosition.longitude) / ( that.unitLongitude));
       position.i = Math.round((position.latitude  - that.topLeftPosition.latitude)  / (-that.unitLatitude));
+   }
+
+   this.positionInArea = function(position) {
+      var p = position;
+      this.attachIJCoordinates(p);
+      return IJCoordinateInArea(p.i, p.j)
+   }
+
+   function IJCoordinateInArea(i, j) {
+      return Array.isArray(that.data[i]) && !isNaN(that.data[i][j]);
    }
 
    function getDiscretePath(currentPosition, nextPosition) {
@@ -364,16 +378,19 @@ function discretePolygonWrapper(polygon, unitDistance) {
                          [nextPosition.latitude, nextPosition.longitude]], that.unitDistance / 1000).map(
             function(simplePosition) {
                var position = new Position(simplePosition[1], simplePosition[0]);
-               attachIJCoordinates(position);
+               that.attachIJCoordinates(position);
                return position;
             });
    }
 
-   function selectPosition() {
-      return that.selectPositionImpl.call(that);
+   function selectPosition(resource) {
+      console.log('in selectPosition(resource)')
+      return that.selectPositionImpl.call(that, resource);
    }
 
    this.selectPositionImpl = function() {
+      console.log(this)
+      throw 'Default no longer supported'
       return this.randomPosition();
    }
 
@@ -408,7 +425,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
       while(canContinueExploring) {
          iterations += 1;
          //console.log('area flight time for iteration is ' + areaFlightTime);
-         var destination = selectPosition(); // later change to this.selectPosition
+         var destination = selectPosition(resource); // later change to this.selectPosition
 
          var positions = getDiscretePath(resource.position, destination);
          //console.log(positions);
@@ -443,7 +460,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
 
 
    function update(resource) {
-      attachIJCoordinates(resource.position);
+      that.attachIJCoordinates(resource.position);
       var minI = 0;
       var maxI = that.data.length;
       var minJ = 0;
@@ -534,9 +551,10 @@ function discretePolygonWrapper(polygon, unitDistance) {
    this.data = discretePolygon;
 }
 
-function hillClimb() {
+function hillClimb(resource) {
    //console.log('in hill climb');
-   var position = this.randomPosition();
+   var position = this.closestPositionInArea(resource.position); // requires pos
+   this.attachIJCoordinates(position)
    var i = position.i;
    var j = position.j;
    var maxij = [i, j];
@@ -703,7 +721,7 @@ function toGeoJson(resource) {
 
         point = resource.path[pathIdx];
 
-        point_array = [point.latitude, point.longitude];
+        point_array = [point.longitude, point.latitude];
 
         line_array.push(point_array)
     }
