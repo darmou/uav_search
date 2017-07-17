@@ -95,29 +95,6 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
 
    this.score = 0;
 
-/*
-   // remove once SORAL is integrated
-   function selectNextAreaToSearch(resource) {
-      var closestArea = null;
-      var minDistance = Infinity;
-      var minAreaIndex = -1;
-      that.areaWrappers.forEach(function(areaWrapper, index) {
-         if(areaWrapper.visited) {
-            return;
-         }
-         var closestPosition = areaWrapper.discreteArea.closestPositionInArea(resource.position);
-         var distance = closestPosition.distanceFrom(resource.position);
-         if(distance < minDistance) {
-           closestArea = areaWrapper; 
-           minDistance = distance;
-           minAreaIndex = index;
-         }
-      });
-      console.log('you just selected the area with index ' + minAreaIndex);
-      return closestArea;
-   }
-*/
-
    function getAllocations(resource) {
       console.log('in getAllocations()')
       console.log(that.areaWrappers)
@@ -136,9 +113,9 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
          speed.setitem(i, that.areaWrappers[i].speed);
       }
 
-      var availableHours = new soral.doubleArray(resources);
-      var hoursPerSecond = 1/3600;
-      availableHours.setitem(0, resource.flightTimeRemaining * hoursPerSecond);
+      var availableTime = new soral.doubleArray(resources);
+      //var hoursPerSecond = 1/3600;
+      availableTime.setitem(0, resource.flightTimeRemaining);
 
       var effectiveness = new soral.Array2D(areas, resources);
 
@@ -149,13 +126,12 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
          }
       }
 
-      return soral.newCharnesCooper(resources, areas, effectiveness, availableHours, POA);
+      return soral.newCharnesCooper(resources, areas, effectiveness, availableTime, POA);
    }
 
    function selectNextAreaToSearch(resource) {
       if(!that.theAllocation) {
-         that.theAllocation = getAllocations(resource)
-         that.activeItr = new soral.ActiveAreasIterator(that.theAllocation);
+         throw 'you never created an allocation'
       } else {
          that.activeItr.increment();
       }
@@ -174,11 +150,32 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
          throw 'No resource exists from which to get the allocation'
       }
       var resourceAssignment = resItr.getResourceAssignment();
-      var timeInHours = resourceAssignment.getTime();
+      //var timeInHours = resourceAssignment.getTime();
+      var time = resourceAssignment.getTime();
 
-      var secondsPerHour = 3600;
-      areaToSearch.allocationAsTime = timeInHours * secondsPerHour;
+      //var secondsPerHour = 3600;
+      areaToSearch.allocationAsTime = time;
       return areaToSearch;
+   }
+
+   this.metadata = {};
+   function initializeMetadata(allocation) {
+      that.metadata.area = []
+      activeItr = new soral.ActiveAreasIterator(allocation);
+
+      // While there are still areas with assignments
+      while ( !activeItr.atEnd() ) { 
+         var areaIndex = activeItr.getCurrentActiveAreaNum();
+         var resItr = new soral.ResourceIterator(allocation, areaIndex);
+         var time = resItr.getResourceAssignment().getTime();
+         that.metadata.area[areaIndex] = {}
+         that.metadata.area[areaIndex].allocationTime = time;
+         that.metadata.area[areaIndex].estimatedPOS = allocation.getPOS(areaIndex);
+         that.metadata.area[areaIndex].searchTime = 0;
+         that.metadata.area[areaIndex].searchDistance = 0;
+         that.metadata.area[areaIndex].actualPOS = 0;
+         activeItr.increment();
+      }   
    }
 
    // the way we score this is percentage of area explored weighted by allocation
@@ -186,6 +183,9 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
    // contribution of subarea score is percentage explored times allocation
    // this score should add to some number between 0 and 100.
    this.explore = function(resource) {
+      this.theAllocation = getAllocations(resource)
+      this.activeItr = new soral.ActiveAreasIterator(this.theAllocation);
+      initializeMetadata(this.theAllocation);
       console.log('about to explore the entire area with our resource');
       //console.log('in explore(resource) for UAVPathPlanner');
       this.score = 0;
@@ -217,7 +217,9 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
             areaFlightTime = areaToSearch.allocation * totalFlightTime;
          }
          console.log('time we will spend in area is ' + areaFlightTime + ' seconds');
-         discreteArea.explore(resource, areaFlightTime); 
+         var areaIndex = this.activeItr.getCurrentActiveAreaNum();
+         var metadata = this.metadata.area[areaIndex]
+         discreteArea.explore(resource, areaFlightTime, metadata); 
 
          // score has to be weighted by alloction and probability of area, i think.
          // maybe i should only return a normalized score?
@@ -415,13 +417,14 @@ function discretePolygonWrapper(polygon, unitDistance) {
          }
    }
 
-   this.explore = function(resource, areaFlightTime) {
+   this.explore = function(resource, areaFlightTime, metadata) {
       // we need to transport the resource within our bounding box
       //console.log('in explore() for discretePolygonWrapper');
       areaFlightTime = transportResourceToArea(resource, areaFlightTime);
       console.log('searching the interior of the subarea');
       var iterations = 0;
       var canContinueExploring = true;
+      var originalScore = this.score();
       while(canContinueExploring) {
          iterations += 1;
          //console.log('area flight time for iteration is ' + areaFlightTime);
@@ -435,6 +438,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
          // position when making our resource travel along a path.
          for(var i = 2; i < positions.length; i++) {
             var timeToFlyToPosition = resource.timeToTravelTo(positions[i]);
+            var distance = resource.position.distanceFrom(positions[i])
             //console.log('flight time remaining ' + resource.flightTimeRemaining);
             if(timeToFlyToPosition > areaFlightTime) {
                //console.log('flight time is over for subarea');
@@ -452,9 +456,14 @@ function discretePolygonWrapper(polygon, unitDistance) {
                break;
             }
             areaFlightTime -= timeToFlyToPosition;
+            metadata.searchTime += timeToFlyToPosition;
+            metadata.searchDistance += distance;
             update(resource);
          }
       }
+      var finalScore = this.score();
+      // you need to do scoring here.
+      metadata.actualPOS = 1 - finalScore/originalScore;
       console.log('Search of subarea complete. There were ' + iterations + ' iterations of our algorithm.');
    }
 
@@ -804,9 +813,9 @@ function calculatePathsForInput(input, res) {
          console.log('size of array with gps coordinates of path: ' + resource.path.length);
          console.log('There is a ' + Math.round(pathPlanner.score) + ' percent chance the target will be found in this path');
          console.log('distance from resource and our specified endpoint: ' + resource.position.distanceFrom(end) + ' meters');
-        res.send(toGeoJson(resource));
-
-
+         var response = toGeoJson(resource);
+         response.metadata = pathPlanner.metadata;
+        res.send(response);
     });
 
 
