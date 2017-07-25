@@ -82,12 +82,11 @@ function  define_settings(req, res) {
     }
 
 
-    res.sendStatus(200);
+    res.json({"message": "saved"});
 }
 
 
 module.exports = {
     submit_search_data: submit_search_data,
-    define_settings:   define_settings,
-    lastName: 'Bond'
+    define_settings:   define_settings
 };
