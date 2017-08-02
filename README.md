@@ -186,7 +186,7 @@ What are some cool features about this project?
       * use "    " and "\d\d\d\d" to represent 0 probability areas and non*zero probability areas with their current probability
 
 ## Setting the settings:
-    If running it on localhost you can use curl or Postman.
+    If running it on localhost you can use curl or Postman. The system will return the existing settings.
 http://127.0.0.1:10010/define_settings/
 ```
 {
@@ -196,5 +196,11 @@ http://127.0.0.1:10010/define_settings/
   "start_location_lng": 288,
   "end_location_lat": -33,
   "end_location_lng": 222
+}
+```
+To delete the existing settings so that the system uses the defaults:
+```
+{
+  "reset": true
 }
 ```
