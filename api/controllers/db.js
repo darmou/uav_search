@@ -6,7 +6,7 @@ function findExistingSettings() {
     try {
         return db.get('SELECT * FROM settings');
     } catch (err) {
-        next(err);
+       return Promise.reject(err);
     }
 }
 
@@ -23,6 +23,10 @@ function updateSQL(settings) {
     });
     sql = sql.substr(0,sql.length-1) + " where id=1";
     return sql;
+}
+
+function dropSettingsSQL() {
+    return "delete from settings where id=1";
 }
 
 function insertIntoSQL(settings) {
@@ -43,6 +47,7 @@ function insertIntoSQL(settings) {
 module.exports = {
     updateSQL: updateSQL,
     insertIntoSQL: insertIntoSQL,
+    dropSettingsSQL: dropSettingsSQL,
     findExistingSettings: findExistingSettings,
     lastName: 'Bond'
 };

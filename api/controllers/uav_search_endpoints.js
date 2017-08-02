@@ -59,20 +59,45 @@ function  define_settings(req, res) {
 
     let settings = req.body;
 
+
     try {
-        dbFunctions.findExistingSettings().then((res) => {
+        dbFunctions.findExistingSettings().then((found_settings) => {
             let sql ="";
-            if(typeof (res) === "undefined") {
+            if(settings.hasOwnProperty('reset')) {
+                sql = dbFunctions.dropSettingsSQL();
+            } else if(typeof (found_settings) === "undefined") {
                 //Nothing in there yet so lets insert
+                console.log("inserting!");
                sql =  dbFunctions.insertIntoSQL(settings);
             } else {
                 //Need to update
-                console.log(res);
+                console.log("updating");
                 sql = dbFunctions.updateSQL(settings);
             }
             console.log(sql);
-            db.run(sql);
-        }).catch(err => console.error(err.stack));
+            debugger;
+            db.run(sql).then(() => {
+                try {
+                    dbFunctions.findExistingSettings().then(existing_settings_res => {
+                        debugger;
+                        if(existing_settings_res) {
+                            res.json(existing_settings_res);
+                        } else {
+                            res.json({"message": "existing settings do not exist yet."});
+                        }
+                    });
+
+                } catch (err) {
+                    console.log(err);
+                    res.json({"message": "could not retrieve settings, error:" + err});
+                }
+            });
+
+
+        }).catch(err =>{
+            console.error(err.stack);
+            res.json({"message": "could not retrieve settings"});
+        });
 
 
         //res.render('post', { post, categories });
@@ -82,7 +107,9 @@ function  define_settings(req, res) {
     }
 
 
-    res.json({"message": "saved"});
+
+
+
 }
 
 
