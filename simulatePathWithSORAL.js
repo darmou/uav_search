@@ -132,6 +132,8 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
    function selectNextAreaToSearch(resource) {
       if(!that.theAllocation) {
          throw 'you never created an allocation'
+      } else if (!that.activeItr) {
+         that.activeItr = new soral.ActiveAreasIterator(that.theAllocation);
       } else {
          that.activeItr.increment();
       }
@@ -161,9 +163,10 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
    this.metadata = {};
    function initializeMetadata(allocation) {
       that.metadata.area = []
-      activeItr = new soral.ActiveAreasIterator(allocation);
+      var activeItr = new soral.ActiveAreasIterator(allocation);
 
       // While there are still areas with assignments
+      var index = 0;
       while ( !activeItr.atEnd() ) { 
          var areaIndex = activeItr.getCurrentActiveAreaNum();
          var resItr = new soral.ResourceIterator(allocation, areaIndex);
@@ -174,6 +177,9 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
          that.metadata.area[areaIndex].searchTime = 0;
          that.metadata.area[areaIndex].searchDistance = 0;
          that.metadata.area[areaIndex].actualPOS = 0;
+         that.metadata.area[areaIndex].priority = index;
+         that.metadata.area[areaIndex].POA = that.areaWrappers[areaIndex].POA;
+         index++;
          activeItr.increment();
       }   
    }
@@ -184,7 +190,6 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
    // this score should add to some number between 0 and 100.
    this.explore = function(resource) {
       this.theAllocation = getAllocations(resource)
-      this.activeItr = new soral.ActiveAreasIterator(this.theAllocation);
       initializeMetadata(this.theAllocation);
       console.log('about to explore the entire area with our resource');
       //console.log('in explore(resource) for UAVPathPlanner');
@@ -219,7 +224,7 @@ function UAVPathPlanner(areaWrappers, unitDistance, startPosition, endPosition) 
          console.log('time we will spend in area is ' + areaFlightTime + ' seconds');
          var areaIndex = this.activeItr.getCurrentActiveAreaNum();
          var metadata = this.metadata.area[areaIndex]
-         discreteArea.explore(resource, areaFlightTime, metadata); 
+         discreteArea.explore(resource, areaFlightTime, metadata, areaToSearch.speed); 
 
          // score has to be weighted by alloction and probability of area, i think.
          // maybe i should only return a normalized score?
@@ -386,7 +391,7 @@ function discretePolygonWrapper(polygon, unitDistance) {
    }
 
    function selectPosition(resource) {
-      console.log('in selectPosition(resource)')
+      //console.log('in selectPosition(resource) function')
       return that.selectPositionImpl.call(that, resource);
    }
 
@@ -417,10 +422,12 @@ function discretePolygonWrapper(polygon, unitDistance) {
          }
    }
 
-   this.explore = function(resource, areaFlightTime, metadata) {
+   this.explore = function(resource, areaFlightTime, metadata, areaSpeed) {
       // we need to transport the resource within our bounding box
       //console.log('in explore() for discretePolygonWrapper');
       areaFlightTime = transportResourceToArea(resource, areaFlightTime);
+      var originalSpeed = resource.speed;
+      resource.speed = areaSpeed;
       console.log('searching the interior of the subarea');
       var iterations = 0;
       var canContinueExploring = true;
@@ -461,9 +468,10 @@ function discretePolygonWrapper(polygon, unitDistance) {
             update(resource);
          }
       }
+      resource.speed = originalSpeed;
       var finalScore = this.score();
       // you need to do scoring here.
-      metadata.actualPOS = 1 - finalScore/originalScore;
+      metadata.actualPOS = (1 - finalScore/originalScore) * metadata.POA;
       console.log('Search of subarea complete. There were ' + iterations + ' iterations of our algorithm.');
    }
 
@@ -579,11 +587,14 @@ function hillClimb(resource) {
                   maxValue = this.data[a][b];
                   maxij = [a,b];
                   continueHillClimb = true;
+                  //console.log('a = ' + a + ', b = ' + b)
+                  //console.log('maxValue is ' + maxValue)
                }
             }  
          }
       }
    }
+   //console.log('finished hill climb')
    return this.ijCoordinatesToPosition(maxij[0], maxij[1]);
 }
 
@@ -740,117 +751,71 @@ function toGeoJson(resource) {
 }
 
 function calculatePathsForInput(input, res) {
-    var areaWrappers = input.features.map(function(feature) {
-        var POA = feature.properties.POA;
-        var area = feature.properties.area;
-        var speed = feature.properties.speed;
-        var ESW = feature.properties.ESW;
-        var pointArray = feature.geometry.coordinates[0];
-        return new AreaWrapper(pointArray, POA, area, speed, ESW);
-    });
-//console.log(areaWrappers);
+   var areaWrappers = input.features.map(function(feature) {
+         var POA = feature.properties.POA;
+         var area = feature.properties.area;
+         var speed = feature.properties.speed;
+         var ESW = feature.properties.ESW;
+         var pointArray = feature.geometry.coordinates[0];
+         return new AreaWrapper(pointArray, POA, area, speed, ESW);
+         });
+   //console.log(areaWrappers);
 
-    var unitDistance = 10;
-    var basePosition = areaWrappers[0].polygon.positions[0];
-    var start = basePosition;
-    var end = basePosition;
+   var unitDistance = 10;
+   var basePosition = areaWrappers[0].polygon.positions[0];
+   var start = basePosition;
+   var end = basePosition;
 
-//console.log(pathPlanner.areaWrappers);
+   // we should have input.resource.speed
+   // and also input.resource.flightTime
+   // also input.resource.start.[latitude|longitude]
+   // also input.resource.end.[latitude|longitude]
+   // maybe even input.unitDistance? not sure about that yet.
+   var speed = 10; // in meters/second
+   var flightTime = 1200; // 20 minutes
 
-// we want to see initial state
-//pathPlanner.print();
-    dbFunctions.findExistingSettings().then(function (settings_res) {
-         console.log("Settings");
-         console.log(settings_res);
-         var speed = 10; // in meters/second
-         var flightTime = 1200; // 20 minutes
-         if(typeof (settings_res) !== "undefined") {
-            speed = settings_res.uav_speed;
-            flightTime = settings_res.total_flight_time;
-            if(settings_res.start_location_lat) {
-               start.latitude = settings_res.start_location_lat;
-               start.longitude = settings_res.start_location_lng;
-            }
-            if(settings_res.end_position_lat) {
-               end.latitude = settings_res.end_position_lat;
-               end.longitude =  settings_res.end_position_lng;
-            }
+   if(typeof input.resource !== "undefined") {
+      if(typeof input.resource.speed !== "undefined") {
+         speed = input.resource.speed;
+      }
+      if(typeof input.resource.flightTime !== "undefined") {
+         flightTime = input.resource.flightTime;
+      }
+   }
 
-         }
+   var pathPlanner = new UAVPathPlanner(areaWrappers, unitDistance, start, end);
 
-        var pathPlanner = new UAVPathPlanner(areaWrappers, unitDistance, start, end);
-        var weightedAllocations = function(areaWrappers) {
-            var totalPOA = 0;
-            areaWrappers.forEach(function(areaWrapper) {
-                totalPOA += areaWrapper.POA;
-            });
-            areaWrappers.forEach(function(areaWrapper) {
-                areaWrapper.allocation = areaWrapper.POA / totalPOA;
-            });
-        };
+   // really we want to make the SORAL allocation pluggable
+   // however, that might not be useful.
+   // pathPlanner.setAllocations(weightedAllocations);
+   pathPlanner.setPointSelectionImplementation(hillClimb); 
 
-        pathPlanner.setAllocations(weightedAllocations);
-        pathPlanner.setPointSelectionImplementation(hillClimb); // untested
-
-         var resource = new Resource(speed, flightTime, basePosition);
-         var canFlyToDestination = function(resouce, position) {
-             var destination = basePosition;
-             var timeToTravelThere = resouce.position.distanceFrom(position) / resouce.speed;
-             var timeToTravelToDestination = position.distanceFrom(destination) / resouce.speed;
-             var totalTime = timeToTravelThere + timeToTravelToDestination;
-             return totalTime <= resource.flightTimeRemaining;
-         }
-         resource.addConstraint(canFlyToDestination);
-         pathPlanner.explore(resource);
+   var resource = new Resource(speed, flightTime, basePosition);
+   var canFlyToDestination = function(resouce, position) {
+      var destination = basePosition;
+      var timeToTravelThere = resouce.position.distanceFrom(position) / resouce.speed;
+      var timeToTravelToDestination = position.distanceFrom(destination) / resouce.speed;
+      var totalTime = timeToTravelThere + timeToTravelToDestination;
+      return totalTime <= resource.flightTimeRemaining;
+   }
+   resource.addConstraint(canFlyToDestination);
+   pathPlanner.explore(resource);
 
    // now this is the final state
-        console.log('Here is an ascii view of how much of our subares we explored (not in any particular order)');
-         pathPlanner.print();
+   console.log('Here is an ascii view of how much of our subares we explored (not in any particular order)');
+   pathPlanner.print();
 
-         console.log('FINAL METRICS:');
-         console.log('distance resource travelled: ' + Math.round(resource.distanceTraveled) + ' meters');
-         console.log('time resource spent travelling: ' + Math.round(resource.distanceTraveled / resource.speed) + ' seconds');
-         console.log('size of array with gps coordinates of path: ' + resource.path.length);
-         console.log('There is a ' + Math.round(pathPlanner.score) + ' percent chance the target will be found in this path');
-         console.log('distance from resource and our specified endpoint: ' + resource.position.distanceFrom(end) + ' meters');
-         var response = toGeoJson(resource);
-         response.metadata = pathPlanner.metadata;
-        res.send(response);
-    });
+   console.log('FINAL METRICS:');
+   console.log('distance resource travelled: ' + Math.round(resource.distanceTraveled) + ' meters');
+   console.log('time resource spent travelling: ' + Math.round(resource.distanceTraveled / resource.speed) + ' seconds');
+   console.log('size of array with gps coordinates of path: ' + resource.path.length);
+   console.log('There is a ' + Math.round(pathPlanner.score) + ' percent chance the target will be found in this path');
+   console.log('distance from resource and our specified endpoint: ' + resource.position.distanceFrom(end) + ' meters');
+   var response = toGeoJson(resource);
+   response.metadata = pathPlanner.metadata;
+   res.send(response);
 
 
 }
 
 module.exports.calculatePathsForInput = calculatePathsForInput;
-
-
-
-
-//var polygon = new Polygon(input);
-
-/*
-var dpw = new discretePolygonWrapper(polygon, unitDistance);
-//console.log(dpw);
-
-var start = dpw.randomPosition();
-
-var originalScore = dpw.score();
-var iterations = 100;
-resource.setPosition(start);
-dpw.selectPositionImpl = hillClimb;
-dpw.explore(resource, iterations);
-var end = resource.position; 
-console.log('path is ' + resource.path.length + ' long');
-console.log('distance traveled is ' + resource.distanceTraveled);
-//console.log(resource.path);
-var finalScore = dpw.score();
-var explored = Math.round(100 * (1 - finalScore / originalScore));
-console.log("percentage explored is " + explored);
-console.log("quality of search is " + explored / resource.distanceTraveled);
-console.log("second quality of search is " + 
-            100 * (explored / resource.distanceTraveled) / (100 / dpw.getArea()));
-
-dpw.print(asSymbolsGenerator(start, end));
-dpw.print(exploredPath);
-dpw.print(asSymbolsGeneratorWithTransform(start, end, exploredPathAsSymbols));
-*/
