@@ -204,3 +204,46 @@ To delete the existing settings so that the system uses the defaults:
   "reset": true
 }
 ```
+
+## Code Summary
+All the search code is in a single file, **simulatePathWithSORAL.js**. It is called by the controller code which is run when you enter 'npm start' into the command line. 
+
+Inside that file are javascript classes (e.g. function UAVPathPlanner(/*parameters*/) { /*body*/ }). Some of the classes are:
+* Position - just our way of representing geocoordinates in code with some helper methods
+* Polygon - used to take the polygon area bounding edges and converts them into a form that is easier to work with.
+* AreaWrapper - contains an instance of the polygon class and some other data like POA, speed, ESW, etc.
+* BoundingBox - used for discretizing a polygon into a grid of points, some of which are inside the polygon
+* discretePolygonWrapper - main class for dealing with operations on discrete polygons with data and operations
+* UAVPathPlanner - top-level class that contains all information to search over all areas with resource
+* Resource - self-explanatory
+
+Some relationships:
+- A polygon is more or less a collection of Position instances (the vertices of the convex polygon)
+- AreaWrapper contains a single instance of a polygon + metadata like POA, speed
+- BoundingBox + Polygon classes are used by discretePolygonWrapper to create a discrete area
+- UAVPathPlanner uses AreaWrapper instances to generate discretePolygonWrapper instances, which is uses for the algorithm.
+
+The meat of the algorithm is done through the `explore()` function in UAVPathPlanner and the `explore()` function of discretePolygonWrapper. Basically UAVPathPlanner computes the SORAL stuff and decides how to explore the given discrete polygon areas. Then when it picks one, it runs the `explore()` method for the discretePolygonWrapper instance. In discretePolygonWrapper, `explore()` will try to transport the resource to the closest point inside the bounds of the polygon, then it will do hill climbing. This process will terminate when the resource does not have enough flight time left to move to whatever the next planned position is (this could be the first step or at some point during hill climbing).
+
+Conceptually it would look something like
+
+```
+UAVPathPlanner
+  function explore(resource):
+    allocations = computeAllocations(resource)
+    for allocation in allocations:
+      allocation.discretePolygonWrapperInstance.explore(resource)
+
+discretePolygonWrapper
+  function explore(resource):
+    closestPoint = getClosestPoint(resource)
+    if !resource.canTravelTo(closestPoint):
+      return
+    resource.travelTo(closestPoint)
+    while(true):
+      nextPoint = getNextPointToTravelTo(resource)
+      if !resource.canTravelTo(nextPoint):
+        return
+      resource.travelTo(nextPoint)
+    return
+```
